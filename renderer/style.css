@@ -259,7 +259,7 @@ html, body {
   border-radius: 14px; box-shadow: var(--shadow);
   animation: pop 0.2s ease;
 }
-.modal.wide { width: min(640px, 92vw); max-width: 92vw; min-width: min(520px, 92vw); }
+.modal.wide { width: min(780px, 96vw); max-width: 96vw; }
 @keyframes pop { from { transform: scale(0.96); opacity: 0;} to { transform: none; opacity: 1;} }
 .modal-title { font-size: 17px; font-weight: 700; padding: 20px 22px 0; }
 .modal-body { padding: 18px 22px; max-height: 65vh; overflow-y: auto; overflow-x: hidden; }
@@ -277,7 +277,7 @@ html, body {
   max-height: 90px; overflow-y: auto;
 }
 
-.field { margin-bottom: 18px; }
+.field { margin-bottom: 22px; }
 .field-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
 .radio-row { display: flex; gap: 18px; flex-wrap: wrap; }
 .radio-row.vertical { flex-direction: column; gap: 8px; }
@@ -375,8 +375,8 @@ html, body {
   border-radius: 8px; color: var(--text);
 }
 .select { cursor: pointer; }
-.row-field { display: flex; gap: 16px; flex-wrap: wrap; }
-.row-field > div { flex: 1; min-width: 160px; }
+.row-field { display: flex; gap: 20px; flex-wrap: wrap; }
+.row-field > div { flex: 1; min-width: 220px; }
 .accent-row { display: flex; align-items: center; gap: 10px; }
 .color-input { width: 48px; height: 34px; border: 1px solid var(--border); border-radius: 8px; background: none; cursor: pointer; padding: 2px; }
 

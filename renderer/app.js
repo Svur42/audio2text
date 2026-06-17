@@ -171,8 +171,7 @@ function bindEvents() {
   $('#confirm-cancel').addEventListener('click', closeConfirm);
   $('#confirm-ok').addEventListener('click', confirmStart);
   $$('input[name="music"]').forEach(r => r.addEventListener('change', updateMusicHint));
-  $('#btn-pick-unified').addEventListener('click', pickUnifiedDir);
-  $('#unified-path').addEventListener('click', pickUnifiedDir);   // 点 input 也触发
+  $('#unified-path').addEventListener('click', pickUnifiedDir);   // 点 input 弹文件夹选择
   const ufSel = $('#unified-format');
   if (ufSel) ufSel.addEventListener('change', () => applyUnifiedFormat(ufSel.value));
   $('#btn-all-music')?.addEventListener('click', () => {
@@ -457,8 +456,10 @@ const DEMUCS_MODELS = [
 function fillSelect(sel, options, current, downloadedSet) {
   // downloadedSet: Set of downloaded model values (null = 不知道，不加前缀)
   sel.innerHTML = options.map(([v, label]) => {
-    // 符号改为外部 CSS 图标显示，option 内只保留纯文本
-    return `<option value="${v}"${v === current ? ' selected' : ''}>${label}</option>`;
+    // ● 前缀：在 dropdown 打开时可见，表示该模型已下载（纯文字，无颜色限制）
+    let prefix = '';
+    if (downloadedSet) prefix = downloadedSet.has(v) ? '● ' : '  ';
+    return `<option value="${v}"${v === current ? ' selected' : ''}>${prefix}${label}</option>`;
   }).join('');
 }
 
@@ -499,7 +500,7 @@ async function refreshAllModelDropdowns() {
   const demucsDownloaded = demucsOk ? new Set([currentDemucs]) : new Set();
   fillSelect($('#set-demucs-model'), DEMUCS_MODELS, currentDemucs, demucsDownloaded);
 
-  // 刷新 status tag、下载按钮、外部状态图标
+  // 刷新 status tag 和下载按钮
   const wOk = whisperDownloaded.has(currentWhisper);
   const wTag = $('#whisper-model-status');
   if (wTag) { wTag.textContent = wOk ? '已下载' : '未下载，首次将下载'; wTag.className = `status-tag ${wOk?'ok':'miss'}`; }
@@ -507,11 +508,6 @@ async function refreshAllModelDropdowns() {
   if (dTag) { dTag.textContent = demucsOk ? '已下载' : '未下载，首次将下载'; dTag.className = `status-tag ${demucsOk?'ok':'miss'}`; }
   $('#btn-dl-whisper')?.classList.toggle('hidden', wOk);
   $('#btn-dl-demucs')?.classList.toggle('hidden', demucsOk);
-  // 外部图标：已下载 = 双竖杠（CSS），未下载 = 空心圆
-  const wi = $('#whisper-active-icon');
-  if (wi) { wi.dataset.ok = wOk ? '1' : '0'; wi.title = wOk ? '已下载' : '未下载'; }
-  const di = $('#demucs-active-icon');
-  if (di) { di.dataset.ok = demucsOk ? '1' : '0'; di.title = demucsOk ? '已下载' : '未下载'; }
 }
 
 function updatePythonStatus() {

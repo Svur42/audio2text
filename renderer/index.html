@@ -94,8 +94,7 @@
               <span class="unified-label music-dot-hint" id="all-music-hint">全部无</span>
               <span class="unified-sep"></span>
               <span class="unified-label">输出目录：</span>
-              <input type="text" id="unified-path" class="text-input" readonly placeholder="统一目录（可选，留空用默认）" />
-              <button class="btn ghost" id="btn-pick-unified">选择</button>
+              <input type="text" id="unified-path" class="text-input" readonly placeholder="点此选择统一目录（可选）" style="cursor:pointer" />
             </div>
           </div>
 
@@ -130,7 +129,6 @@
           <div>
             <label class="field-label">Whisper 模型</label>
             <div class="model-row">
-              <span class="model-active-icon" id="whisper-active-icon" title="当前使用中"></span>
               <select id="set-whisper-model" class="select"></select>
               <span id="whisper-model-status" class="status-tag"></span>
               <button class="btn ghost tiny hidden" id="btn-dl-whisper">⬇ 下载</button>
@@ -139,7 +137,6 @@
           <div>
             <label class="field-label">Demucs 模型（音乐分离）</label>
             <div class="model-row">
-              <span class="model-active-icon" id="demucs-active-icon" title="当前使用中"></span>
               <select id="set-demucs-model" class="select"></select>
               <span id="demucs-model-status" class="status-tag"></span>
               <button class="btn ghost tiny hidden" id="btn-dl-demucs">⬇ 下载</button>
