@@ -266,6 +266,12 @@ function openConfirm(files) {
     renderSingleConfirm();
   } else {
     renderConfirmRows();
+    // 初始同步统一格式：全部相同就显示该值，否则显示"不统一"
+    const uf = $('#unified-format');
+    if (uf) {
+      const unique = [...new Set(pendingFormats)];
+      uf.value = unique.length === 1 ? unique[0] : '';
+    }
   }
   $('#confirm-modal').classList.remove('hidden');
 }
@@ -451,13 +457,8 @@ const DEMUCS_MODELS = [
 function fillSelect(sel, options, current, downloadedSet) {
   // downloadedSet: Set of downloaded model values (null = 不知道，不加前缀)
   sel.innerHTML = options.map(([v, label]) => {
-    let prefix = '';
-    if (downloadedSet) {
-      if (v === current) prefix = '‖ ';             // 当前使用中（双竖杠单字符）
-      else if (downloadedSet.has(v)) prefix = '● '; // 已下载（实心圆）
-      else prefix = '○ ';                           // 未下载（空心圆）
-    }
-    return `<option value="${v}"${v === current ? ' selected' : ''}>${prefix}${label}</option>`;
+    // 符号改为外部 CSS 图标显示，option 内只保留纯文本
+    return `<option value="${v}"${v === current ? ' selected' : ''}>${label}</option>`;
   }).join('');
 }
 
@@ -498,7 +499,7 @@ async function refreshAllModelDropdowns() {
   const demucsDownloaded = demucsOk ? new Set([currentDemucs]) : new Set();
   fillSelect($('#set-demucs-model'), DEMUCS_MODELS, currentDemucs, demucsDownloaded);
 
-  // 刷新 status tag、下载按钮、active icon
+  // 刷新 status tag、下载按钮、外部状态图标
   const wOk = whisperDownloaded.has(currentWhisper);
   const wTag = $('#whisper-model-status');
   if (wTag) { wTag.textContent = wOk ? '已下载' : '未下载，首次将下载'; wTag.className = `status-tag ${wOk?'ok':'miss'}`; }
@@ -506,9 +507,11 @@ async function refreshAllModelDropdowns() {
   if (dTag) { dTag.textContent = demucsOk ? '已下载' : '未下载，首次将下载'; dTag.className = `status-tag ${demucsOk?'ok':'miss'}`; }
   $('#btn-dl-whisper')?.classList.toggle('hidden', wOk);
   $('#btn-dl-demucs')?.classList.toggle('hidden', demucsOk);
-  // active icon 始终显示（表示"当前使用"）
-  const wi = $('#whisper-active-icon'); if (wi) wi.style.display = 'inline-flex';
-  const di = $('#demucs-active-icon');  if (di) di.style.display = 'inline-flex';
+  // 外部图标：已下载 = 双竖杠（CSS），未下载 = 空心圆
+  const wi = $('#whisper-active-icon');
+  if (wi) { wi.dataset.ok = wOk ? '1' : '0'; wi.title = wOk ? '已下载' : '未下载'; }
+  const di = $('#demucs-active-icon');
+  if (di) { di.dataset.ok = demucsOk ? '1' : '0'; di.title = demucsOk ? '已下载' : '未下载'; }
 }
 
 function updatePythonStatus() {

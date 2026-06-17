@@ -259,7 +259,7 @@ html, body {
   border-radius: 14px; box-shadow: var(--shadow);
   animation: pop 0.2s ease;
 }
-.modal.wide { width: min(560px, 92vw); max-width: 100%; }
+.modal.wide { width: min(640px, 92vw); max-width: 92vw; min-width: min(520px, 92vw); }
 @keyframes pop { from { transform: scale(0.96); opacity: 0;} to { transform: none; opacity: 1;} }
 .modal-title { font-size: 17px; font-weight: 700; padding: 20px 22px 0; }
 .modal-body { padding: 18px 22px; max-height: 65vh; overflow-y: auto; overflow-x: hidden; }
@@ -288,18 +288,29 @@ html, body {
 .field-sub { font-weight: 400; font-size: 12px; color: var(--text-faint); margin-left: 8px; }
 .model-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .model-row .select { min-width: 0; flex: 1; max-width: 100%; }
-/* 当前使用中图标：两条短竖线（CSS 画，可控尺寸和间距）*/
+/* 模型状态外部图标：双竖杠(已下载) 或 空心圆(未下载) */
 .model-active-icon {
-  flex-shrink: 0; display: inline-flex; align-items: center;
-  gap: 2px; height: 14px;
+  flex-shrink: 0; width: 14px; height: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
 }
-.model-active-icon::before,
-.model-active-icon::after {
+/* 已下载：两条短竖线 */
+.model-active-icon[data-ok="1"] {
+  gap: 3px;
+}
+.model-active-icon[data-ok="1"]::before,
+.model-active-icon[data-ok="1"]::after {
   content: ''; display: block;
   width: 2px; height: 10px;
   background: var(--accent); border-radius: 1px;
 }
-/* 默认隐藏，由 JS 控制显隐 */
+/* 未下载：空心圆 */
+.model-active-icon[data-ok="0"] {
+  border-radius: 50%; border: 2px solid var(--text-faint);
+}
+.model-active-icon[data-ok="0"]::before,
+.model-active-icon[data-ok="0"]::after { content: none; }
+/* 初始未检测：不显示 */
+.model-active-icon:not([data-ok]) { visibility: hidden; }
 
 /* 确认弹窗里的迷你文件列表 */
 .file-rows {
