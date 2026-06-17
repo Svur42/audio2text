@@ -154,9 +154,9 @@ function bindEvents() {
     const p = await window.api.pickExe();
     if (p) { $('#set-python').value = p; updatePythonStatus(); }
   });
-  // 切换模型 → 刷新该模型的下载状态
-  $('#set-whisper-model').addEventListener('change', refreshWhisperModelStatus);
-  $('#set-demucs-model').addEventListener('change', refreshDemucsModelStatus);
+  // 切换模型 → 重新检测当前选中模型的下载状态（并更新下拉前缀）
+  $('#set-whisper-model').addEventListener('change', refreshAllModelDropdowns);
+  $('#set-demucs-model').addEventListener('change', refreshAllModelDropdowns);
   $('#reset-accent').addEventListener('click', () => { $('#set-accent').value = '#5b5bfa'; });
 
   // 确认弹窗
@@ -232,7 +232,7 @@ function openConfirm(files) {
   if (cc2) cc2.textContent = files.length;
 
   // 重置统一选项
-  $('input[name="music"][value="no"]').checked = true;
+  // 旧版全局 music radio 已移除，批量 pendingMusics 默认全 false
   $('#unified-path').value = '';
   const uf = $('#unified-format');
   if (uf) uf.value = '';
@@ -251,7 +251,6 @@ function openConfirm(files) {
   if (isSingle) {
     renderSingleConfirm();
   } else {
-    updateMusicHint();
     renderConfirmRows();
   }
   $('#confirm-modal').classList.remove('hidden');
@@ -427,12 +426,22 @@ const DEMUCS_MODELS = [
   ['mdx_q',         'mdx_q（量化版 · CPU 友好）'],
 ];
 
-function fillSelect(sel, options, current) {
-  sel.innerHTML = options.map(([v, label]) =>
-    `<option value="${v}"${v === current ? ' selected' : ''}>${label}</option>`).join('');
+function fillSelect(sel, options, current, downloadedSet) {
+  // downloadedSet: Set of downloaded model values (null = 不知道，不加前缀)
+  sel.innerHTML = options.map(([v, label]) => {
+    let prefix = '';
+    if (downloadedSet) {
+      if (v === current) prefix = '▶ ';           // 当前使用中
+      else if (downloadedSet.has(v)) prefix = '✓ '; // 已下载
+      else prefix = '○ ';                           // 未下载
+    }
+    const suffix = v === current ? '（使用中）' : '';
+    return `<option value="${v}"${v === current ? ' selected' : ''}>${prefix}${label}${suffix}</option>`;
+  }).join('');
 }
 
 function openSettings() {
+  // 先快速填充无状态版（秒开），再异步更新 ▶ ✓ ○ 前缀
   fillSelect($('#set-whisper-model'), WHISPER_MODELS, config.whisperModel || 'large-v3-turbo');
   fillSelect($('#set-demucs-model'), DEMUCS_MODELS, config.demucsModel || 'htdemucs');
   $('#set-outdir').value = config.outDir || '';
@@ -445,10 +454,37 @@ function openSettings() {
   $('#set-theme').value = config.theme || 'dark';
   $('#set-accent').value = config.accent || '#5b5bfa';
   updatePythonStatus();
-  refreshWhisperModelStatus();
-  refreshDemucsModelStatus();
   refreshModelStatus();
   $('#settings-modal').classList.remove('hidden');
+  refreshAllModelDropdowns();  // 异步，不阻塞弹窗显示
+}
+
+async function refreshAllModelDropdowns() {
+  const whisperDir = $('#set-whisper').value || config.whisperDir;
+  const demucsDir = $('#set-demucs').value || config.demucsCacheDir;
+  const currentWhisper = $('#set-whisper-model').value;
+  const currentDemucs = $('#set-demucs-model').value;
+
+  // 并发检测所有 Whisper 模型
+  const whisperResults = await Promise.all(
+    WHISPER_MODELS.map(([v]) => window.api.whisperModelStatus(whisperDir, v).then(ok => [v, ok]))
+  );
+  const whisperDownloaded = new Set(whisperResults.filter(([, ok]) => ok).map(([v]) => v));
+  fillSelect($('#set-whisper-model'), WHISPER_MODELS, currentWhisper, whisperDownloaded);
+
+  // Demucs：只能整体检测有无 .th，把当前选中的视为已下载（若有）
+  const demucsOk = await window.api.demucsModelStatus(demucsDir);
+  const demucsDownloaded = demucsOk ? new Set([currentDemucs]) : new Set();
+  fillSelect($('#set-demucs-model'), DEMUCS_MODELS, currentDemucs, demucsDownloaded);
+
+  // 刷新 status tag 和下载按钮
+  const wOk = whisperDownloaded.has(currentWhisper);
+  const wTag = $('#whisper-model-status');
+  if (wTag) { wTag.textContent = wOk ? '已下载' : '未下载，首次将下载'; wTag.className = `status-tag ${wOk?'ok':'miss'}`; }
+  const dTag = $('#demucs-model-status');
+  if (dTag) { dTag.textContent = demucsOk ? '已下载' : '未下载，首次将下载'; dTag.className = `status-tag ${demucsOk?'ok':'miss'}`; }
+  $('#btn-dl-whisper')?.classList.toggle('hidden', wOk);
+  $('#btn-dl-demucs')?.classList.toggle('hidden', demucsOk);
 }
 
 function updatePythonStatus() {
