@@ -242,9 +242,23 @@ if __name__ == "__main__":
     if a.download_demucs:
         p(f"正在下载 Demucs 模型：{a.demucs_model}")
         p("下载中...（此步无进度条，请耐心等待）")
-        from demucs.pretrained import get_model
-        get_model(a.demucs_model)
-        p(f"下载完成：{a.demucs_model}")
+        # 用 demucs CLI 触发权重 .th 下载（demucs 4.x 用哈希文件名，import 不一定下 .th）
+        # 用 /dev/null 或 NUL 作为假输入，demucs 会在下载权重后报文件错误，但权重已缓存
+        dummy = "nul" if sys.platform == "win32" else "/dev/null"
+        result = subprocess.run(
+            [PYTHON, "-m", "demucs", "-n", a.demucs_model, "--two-stems", "vocals",
+             "--device", "cpu", "-o", tempfile.gettempdir(), dummy],
+            capture_output=True
+        )
+        # 预期会报文件不存在错误，但只要权重已缓存就算成功
+        import glob, os as _os
+        torch_home = _os.environ.get("TORCH_HOME", str(Path.home() / ".cache" / "torch"))
+        ckpt = Path(torch_home) / "hub" / "checkpoints"
+        th_files = list(ckpt.glob("*.th")) if ckpt.exists() else []
+        if th_files:
+            p(f"下载完成：{a.demucs_model}（权重已缓存到 {ckpt}）")
+        else:
+            p(f"下载可能失败，请检查网络后重试")
         sys.exit(0)
 
     if not a.file:

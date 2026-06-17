@@ -22,13 +22,20 @@ contextBridge.exposeInMainWorld('api', {
   // 模型状态
   whisperModelStatus: (whisperDir, modelName) =>
     ipcRenderer.invoke('model:whisperStatus', { whisperDir, modelName }),
-  demucsModelStatus: (demucsDir, modelName) =>
-    ipcRenderer.invoke('model:demucsStatus', { demucsDir, modelName }),
+  demucsModelStatus: (demucsDir) =>
+    ipcRenderer.invoke('model:demucsStatus', { demucsDir }),
 
   // 模型下载（fire-and-forget，进度通过事件推送）
   downloadModel: (payload) => ipcRenderer.send('model:download', payload),
-  onDownloadProgress: (cb) => ipcRenderer.on('model:download:progress', (_e, d) => cb(d)),
-  onDownloadDone: (cb) => ipcRenderer.on('model:download:done', (_e, d) => cb(d)),
+  // 先 removeAllListeners 再注册，防止 init() 重复调用时 listener 叠加（#1）
+  onDownloadProgress: (cb) => {
+    ipcRenderer.removeAllListeners('model:download:progress');
+    ipcRenderer.on('model:download:progress', (_e, d) => cb(d));
+  },
+  onDownloadDone: (cb) => {
+    ipcRenderer.removeAllListeners('model:download:done');
+    ipcRenderer.on('model:download:done', (_e, d) => cb(d));
+  },
 
   // 任务
   addTasks: (payload) => ipcRenderer.invoke('tasks:add', payload),

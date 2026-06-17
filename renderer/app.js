@@ -346,7 +346,7 @@ async function refreshWhisperModelStatus() {
 async function refreshDemucsModelStatus() {
   const name = $('#set-demucs-model').value;
   const dir = $('#set-demucs').value || config.demucsCacheDir;
-  const ok = await window.api.demucsModelStatus(dir, name);
+  const ok = await window.api.demucsModelStatus(dir);
   const tag = $('#demucs-model-status');
   const btn = $('#btn-dl-demucs');
   if (ok) {

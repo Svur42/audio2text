@@ -44,7 +44,7 @@ function getDefaults() {
     pythonPath: '',            // 空 = 首启动自动检测
     pipelinePath: '',          // 空 = 用内置 bundledPipelinePath()
     ffmpegDir: '',             // 空 = 依赖系统 PATH
-    outDir: path.join(app.getPath('documents'), 'Audio2Text'),
+    outDir: path.join(app.getPath('documents') || app.getPath('home'), 'Audio2Text'),
     whisperDir: path.join(app.getPath('userData'), 'whisper-models'),
     demucsCacheDir: path.join(os.homedir(), '.cache', 'torch'),
     whisperModel: 'large-v3-turbo',
@@ -267,11 +267,18 @@ function makeTask(file, music, outDir) {
   return t;
 }
 
+// 安全推送（#2：webContents 可能已销毁）
+function safeSend(channel, ...args) {
+  if (mainWin && !mainWin.isDestroyed() && !mainWin.webContents.isDestroyed()) {
+    mainWin.webContents.send(channel, ...args);
+  }
+}
+
 function pushTaskState() {
-  if (!mainWin) return;
+  if (!mainWin || mainWin.isDestroyed() || mainWin.webContents.isDestroyed()) return;
   const list = [...tasks.values()].map(t => ({
     id: t.id, name: t.name, music: t.music, outDir: t.outDir,
-    status: t.status, pct: t.pct, step: t.step,
+    status: t.status, pct: Math.min(100, t.pct || 0), step: t.step,  // #8: 百分比上限 100
     durationMin: t.durationMin, etaMin: t.etaMin, startTs: t.startTs,
     outFile: t.outFile, indeterminate: t.indeterminate,
     processedSec: t.processedSec, totalSec: t.totalSec,
@@ -344,8 +351,8 @@ function startProcess(t, cfg, isRetry) {
 
     // CPU 模式警告（无 CUDA 时速度极慢）
     if (/计算设备：CPU/i.test(line)) {
-      if (mainWin) mainWin.webContents.send('app:warnings',
-        ['当前以 CPU 模式转写（未检测到 CUDA），速度较慢，视文件长度可能需数十分钟，请耐心等待。']);
+      safeSend('app:warnings',
+        ['当前以 CPU 模式转写（未检测到 CUDA），速度较慢。建议在设置里切换为 small 或 medium 模型以提升速度。']);
     }
 
     // 友好处理 Python 包缺失错误（从 stderr 捕获后推到 step）
@@ -506,9 +513,12 @@ async function cancelTask(id) {
     if (proc && proc.pid) {
       await killTaskTree(proc.pid);
       // close 事件里会接着 cleanupTemp + runNext
+    } else {
+      // 无 proc（等显存 / OOM 重试窗口）：立刻释放 runningId，不等 30s 超时
+      runningId = null;
+      cleanupTemp();
+      setImmediate(runNext);
     }
-    // 无 proc（处于等显存 / OOM 重试等待窗口）：
-    // 由 runNext 或 close 重试分支的 await 后检查统一收尾，这里不动 runningId
   } else if (t.status === 'queued') {
     tasks.delete(id);
     pushTaskState();
@@ -561,12 +571,12 @@ ipcMain.handle('config:detectModels', () => detectModels());
 ipcMain.handle('model:whisperStatus', (_e, { whisperDir, modelName }) =>
   isWhisperModelDownloaded(whisperDir || loadConfig().whisperDir, modelName));
 
-// Demucs 某模型是否已下载（.th 文件名前缀匹配模型名）
-ipcMain.handle('model:demucsStatus', (_e, { demucsDir, modelName }) => {
+// Demucs 模型是否已下载（demucs 4.x 用哈希文件名，无法按模型名匹配）
+// 策略：checkpoints 目录存在且有 .th 文件 = 已下载过至少一个 demucs 模型
+ipcMain.handle('model:demucsStatus', (_e, { demucsDir }) => {
   const ckpt = path.join(demucsDir || loadConfig().demucsCacheDir, 'hub', 'checkpoints');
   try {
-    const prefix = String(modelName).replace(/-/g, '_').split('_')[0];
-    return fs.readdirSync(ckpt).some(f => f.includes(modelName.replace('_', '-')) && f.endsWith('.th'));
+    return fs.readdirSync(ckpt).some(f => f.endsWith('.th'));
   } catch (e) { return false; }
 });
 
@@ -593,19 +603,22 @@ ipcMain.on('model:download', (event, { type, modelName, demucsModel, whisperDir,
     windowsHide: true,
   });
   let buf = Buffer.alloc(0);
+  const senderSend = (ch, data) => {
+    if (!event.sender.isDestroyed()) event.sender.send(ch, data);
+  };
   const drain = (chunk) => {
     buf = Buffer.concat([buf, chunk]);
     let idx;
     while ((idx = buf.indexOf(0x0a)) >= 0) {
       const line = buf.slice(0, idx).toString('utf8').replace(/\r$/, '');
       buf = buf.slice(idx + 1);
-      if (line.trim()) event.sender.send('model:download:progress', { type, line });
+      if (line.trim()) senderSend('model:download:progress', { type, line });
     }
   };
   child.stdout.on('data', drain);
-  child.stderr.on('data', (c) => event.sender.send('model:download:progress', { type, line: c.toString('utf8').trim() }));
-  child.on('close', (code) => event.sender.send('model:download:done', { type, code }));
-  child.on('error', (err) => event.sender.send('model:download:done', { type, code: 1, error: err.message }));
+  child.stderr.on('data', (c) => senderSend('model:download:progress', { type, line: c.toString('utf8').trim() }));
+  child.on('close', (code) => senderSend('model:download:done', { type, code }));
+  child.on('error', (err) => senderSend('model:download:done', { type, code: 1, error: err.message }));
 });
 
 ipcMain.handle('dialog:pickDir', async () => {
@@ -690,10 +703,8 @@ app.whenReady().then(async () => {
   createWindow();
   const cfg = loadConfig();
   const problems = await selfCheck(cfg);
-  if (problems.length && mainWin) {
-    mainWin.webContents.once('did-finish-load', () => {
-      mainWin.webContents.send('app:warnings', problems);
-    });
+  if (problems.length) {
+    mainWin.webContents.once('did-finish-load', () => safeSend('app:warnings', problems));
   }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
