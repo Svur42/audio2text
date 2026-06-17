@@ -98,24 +98,20 @@ html, body {
 .spinning { animation: spin 0.5s linear; }
 @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
 
-/* ── Easter egg: 刷新键飞走 ── */
+/* ── Easter egg: 刷新键飞走（大弧线版）── */
 @keyframes refreshFlyOff {
-  0%   { transform: rotate(0deg) scale(1);            opacity: 1; }
-  40%  { transform: rotate(720deg) scale(1.2);         opacity: 1; }
-  100% { transform: rotate(1440deg) translateX(160px) scale(0.4); opacity: 0; }
+  0%   { transform: rotate(0deg)    translate(0, 0)       scale(1);   opacity: 1; }
+  25%  { transform: rotate(720deg)  translate(30px,-15px) scale(1.25); opacity: 1; }
+  100% { transform: rotate(2160deg) translate(520px,-55px) scale(0.2); opacity: 0; }
 }
 @keyframes refreshFlyBack {
-  0%   { transform: translateX(-160px) rotate(-360deg) scale(0.4); opacity: 0; }
-  65%  { opacity: 1; }
-  82%  { transform: translateX(10px) rotate(15deg) scale(1.08); opacity: 1; }
-  100% { transform: translateX(0) rotate(0deg) scale(1); opacity: 1; }
+  0%   { transform: translate(-520px, 55px) rotate(-720deg) scale(0.2); opacity: 0; }
+  55%  { opacity: 1; }
+  83%  { transform: translate(16px,-8px) rotate(25deg) scale(1.12);    opacity: 1; }
+  100% { transform: translate(0, 0) rotate(0deg) scale(1);             opacity: 1; }
 }
-.refresh-flyoff  { animation: refreshFlyOff  0.75s cubic-bezier(0.4,0,1,1) forwards; pointer-events:none; }
-.refresh-flyback { animation: refreshFlyBack 0.55s cubic-bezier(0,0,0.2,1.6) forwards; }
-
-/* ── Easter egg: logo 彩虹 ── */
-@keyframes rainbowHue { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
-.rail-logo.rainbow { animation: rainbowHue 1.2s linear infinite; }
+.refresh-flyoff  { animation: refreshFlyOff  0.9s cubic-bezier(0.3,0,0.9,1)   forwards; pointer-events:none; }
+.refresh-flyback { animation: refreshFlyBack 0.65s cubic-bezier(0,0,0.15,1.7) forwards; }
 
 .sidebar {
   width: var(--sidebar-w);
