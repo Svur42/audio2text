@@ -127,18 +127,18 @@ function bindEvents() {
     if (_logoClicks >= 5 && !_logoRainbow) {
       _logoClicks = 0;
       _logoRainbow = true;
-      const overlay = $('#rainbow-overlay');
-      if (overlay) overlay.classList.add('active');
-
+      // 三区块各差 1s 相位 → 同时呈现三种颜色（CSS hue-rotate 实现）
+      $('.app').classList.add('rainbow-mode');
+      // --accent 也同步旋转，用于进度条等 inline accent 元素
       const baseAccent = config.accent || '#5b5bfa';
       const { h, s, l } = hexToHsl(baseAccent);
-      const start = Date.now(), duration = 8000;
+      const start = Date.now(), duration = 9000;
       (function frame() {
         const elapsed = Date.now() - start;
         if (elapsed >= duration) {
           document.documentElement.style.setProperty('--accent', baseAccent);
           document.documentElement.style.setProperty('--accent-soft', hexToSoft(baseAccent));
-          if (overlay) overlay.classList.remove('active');
+          $('.app').classList.remove('rainbow-mode');
           _logoRainbow = false;
           return;
         }

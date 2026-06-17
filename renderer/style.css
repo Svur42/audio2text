@@ -66,6 +66,12 @@ html, body {
 /* ---------- 布局 ---------- */
 .app { display: flex; height: 100vh; }
 
+/* 彩虹模式：三大区块各自做 hue-rotate，相位差 120°，同时能看到三种颜色 */
+@keyframes hueRotateFull { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
+.app.rainbow-mode .rail    { animation: hueRotateFull 3s linear -0s   infinite; }
+.app.rainbow-mode .sidebar { animation: hueRotateFull 3s linear -1s   infinite; }
+.app.rainbow-mode .content { animation: hueRotateFull 3s linear -2s   infinite; }
+
 .rail {
   width: var(--rail-w);
   background: var(--bg-rail);
@@ -116,16 +122,22 @@ html, body {
 /* ── Easter egg: UFO 飞右上角 + 斜向光束 ── */
 .ufo-wrap { display: inline-flex; flex-direction: column; align-items: center; }
 
-/* UFO 飞到右上角的运动（先弧形抬升再向右加速） */
+/* UFO 飞右上角：5 个关键帧模拟自然弧线 + 落定抖动 */
 @keyframes ufoFlyRight {
-  0%   { transform: translate(0, 0) rotate(0deg); }
-  35%  { transform: translate(80px, -100px) rotate(12deg); }
-  100% { transform: translate(250px, -160px) rotate(6deg); }
+  0%   { transform: translate(0, 0)         rotate(0deg)  scale(1);    }
+  18%  { transform: translate(40px, -75px)  rotate(10deg) scale(1.06); }
+  42%  { transform: translate(140px,-138px) rotate(18deg) scale(1.1);  }
+  72%  { transform: translate(230px,-158px) rotate(9deg)  scale(1.04); }
+  88%  { transform: translate(252px,-163px) rotate(7deg)  scale(1.02); } /* 轻微冲过 */
+  100% { transform: translate(244px,-158px) rotate(6deg)  scale(1);    } /* 落定 */
 }
 @keyframes ufoFlyBack {
-  0%   { transform: translate(250px, -160px) rotate(6deg); }
-  55%  { transform: translate(70px, -50px) rotate(-4deg); }
-  100% { transform: translate(0, 0) rotate(0deg); }
+  0%   { transform: translate(244px,-158px) rotate(6deg)  scale(1);   }
+  22%  { transform: translate(180px,-120px) rotate(-5deg) scale(1.04);}
+  55%  { transform: translate(70px, -48px)  rotate(-8deg) scale(1.06);}
+  80%  { transform: translate(10px,  -8px)  rotate(-2deg) scale(1.02);}
+  92%  { transform: translate(-6px,   3px)  rotate(1deg)  scale(1.01);}  /* 小过冲 */
+  100% { transform: translate(0, 0)         rotate(0deg)  scale(1);   }
 }
 
 /* 光束独立于 UFO，固定在 empty 右上区域向左下打光 */
@@ -154,7 +166,7 @@ html, body {
 .ufo-beam-symbol {
   position: absolute; bottom: 10px; left: 50%;
   transform: translateX(-50%) scale(0.5);
-  font-size: 82px; color: #cc0a0a; line-height: 1;
+  font-size: 90px; color: #cc0a0a; line-height: 1;
   text-shadow:
     0 0 22px rgba(255,20,20,1),
     0 0 50px rgba(210,0,0,0.7),
@@ -258,7 +270,53 @@ html, body {
   align-items: center; justify-content: center;
   color: var(--text-faint); gap: 10px;
 }
-.empty-art { font-size: 96px; opacity: 0.5; animation: float 3s ease-in-out infinite; }
+/* 用 emoji UFO 时保留，用 CSS UFO 时 display:none */
+.empty-art { font-size: 96px; opacity: 0.5; animation: float 3s ease-in-out infinite; display: none; }
+
+/* ---------- CSS 自制 UFO ---------- */
+.ufo-css {
+  width: 90px; height: 50px;
+  position: relative;
+  animation: float 3s ease-in-out infinite;
+  opacity: 0.75;
+  cursor: pointer;
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,0.45));
+}
+/* 碟形主体 */
+.ufo-disc {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 28px;
+  background: radial-gradient(ellipse 80% 60% at 45% 35%,
+    #d8d8e8 0%, #a0a0b8 40%, #686880 75%, #484860 100%);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 -3px 8px rgba(0,0,0,0.35),
+    inset 0 3px 6px rgba(255,255,255,0.12),
+    0 4px 12px rgba(0,0,0,0.4);
+}
+/* 舷窗观光灯 */
+.ufo-rim {
+  position: absolute; bottom: 5px; left: 12px; right: 12px; height: 5px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255,230,100,0.9) 0, rgba(255,230,100,0.9) 4px,
+    rgba(255,150,50,0.7) 4px, rgba(255,150,50,0.7) 6px,
+    transparent 6px, transparent 13px
+  );
+}
+/* 玻璃穹顶 */
+.ufo-dome {
+  position: absolute; top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 38px; height: 22px;
+  background: radial-gradient(ellipse 60% 70% at 38% 28%,
+    rgba(210,240,255,0.95) 0%,
+    rgba(140,190,240,0.8) 45%,
+    rgba(80,120,200,0.55) 100%);
+  border-radius: 50% 50% 50% 50% / 100% 100% 0% 0%;
+  box-shadow: 0 0 10px rgba(140,190,255,0.5), inset 0 2px 4px rgba(255,255,255,0.3);
+}
 .empty-text { font-size: 15px; color: var(--text-dim); }
 .empty-sub { font-size: 13px; }
 @keyframes float { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-10px);} }

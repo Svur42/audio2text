@@ -60,7 +60,13 @@
       <section id="task-area" class="task-area">
         <div class="empty" id="empty-state">
           <div class="ufo-wrap">
-            <div class="empty-art" id="ufo-art">🛸</div>
+            <!-- 自制 CSS UFO（无内置光束） -->
+            <div class="ufo-css" id="ufo-art">
+              <div class="ufo-dome"></div>
+              <div class="ufo-disc">
+                <div class="ufo-rim"></div>
+              </div>
+            </div>
           </div>
           <!-- 光束独立于 UFO，定位在 empty 区域右上方向下打光 -->
           <div id="ufo-beam-wrap" class="ufo-beam-wrap">
@@ -70,8 +76,6 @@
           <div class="empty-text">当前没有任务</div>
           <div class="empty-sub">把音频文件拖进来，或点击「＋ 添加」</div>
         </div>
-        <!-- 彩虹全屏叠加层 -->
-        <div id="rainbow-overlay"></div>
         <div id="task-list" class="task-list"></div>
       </section>
     </main>
