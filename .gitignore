@@ -1,0 +1,16 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 日志与临时
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# 运行时配置（含本机路径，不应入库）
+config.json
+
+# 编辑器
+.vscode/
+.idea/

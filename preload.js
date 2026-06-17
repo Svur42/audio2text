@@ -1,0 +1,45 @@
+'use strict';
+
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
+
+contextBridge.exposeInMainWorld('api', {
+  // 拖拽文件取真实路径（Electron 32+ 已移除 File.path，须用 webUtils）
+  getFilePath: (file) => {
+    try { return webUtils.getPathForFile(file); }
+    catch (e) { return file && file.path ? file.path : null; }
+  },
+
+  // 配置
+  getConfig: () => ipcRenderer.invoke('config:get'),
+  saveConfig: (cfg) => ipcRenderer.invoke('config:save', cfg),
+  detectModels: () => ipcRenderer.invoke('config:detectModels'),
+
+  // 对话框
+  pickDir: () => ipcRenderer.invoke('dialog:pickDir'),
+  pickFiles: () => ipcRenderer.invoke('dialog:pickFiles'),
+  pickExe: () => ipcRenderer.invoke('dialog:pickExe'),
+
+  // 模型状态
+  whisperModelStatus: (whisperDir, modelName) =>
+    ipcRenderer.invoke('model:whisperStatus', { whisperDir, modelName }),
+  demucsModelStatus: (demucsDir, modelName) =>
+    ipcRenderer.invoke('model:demucsStatus', { demucsDir, modelName }),
+
+  // 模型下载（fire-and-forget，进度通过事件推送）
+  downloadModel: (payload) => ipcRenderer.send('model:download', payload),
+  onDownloadProgress: (cb) => ipcRenderer.on('model:download:progress', (_e, d) => cb(d)),
+  onDownloadDone: (cb) => ipcRenderer.on('model:download:done', (_e, d) => cb(d)),
+
+  // 任务
+  addTasks: (payload) => ipcRenderer.invoke('tasks:add', payload),
+  refreshTasks: () => ipcRenderer.invoke('tasks:list'),
+  cancelTask: (id) => ipcRenderer.invoke('task:cancel', id),
+  removeTask: (id) => ipcRenderer.invoke('task:remove', id),
+  deleteTask: (id, deleteFile) => ipcRenderer.invoke('task:delete', { id, deleteFile }),
+  clearFinished: () => ipcRenderer.invoke('tasks:clearFinished'),
+  openFolder: (filePath) => ipcRenderer.invoke('task:openFolder', filePath),
+
+  // 事件监听
+  onTasksUpdate: (cb) => ipcRenderer.on('tasks:update', (_e, list) => cb(list)),
+  onWarnings: (cb) => ipcRenderer.on('app:warnings', (_e, msgs) => cb(msgs)),
+});

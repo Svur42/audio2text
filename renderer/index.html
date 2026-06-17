@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>Audio2Text</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 全局拖拽遮罩 -->
+  <div id="drop-overlay" class="drop-overlay">
+    <div class="drop-hint">
+      <div class="drop-icon">⬇</div>
+      <div>松开以添加音频文件</div>
+    </div>
+  </div>
+
+  <div class="app">
+    <!-- 左窄栏 -->
+    <nav class="rail">
+      <div class="rail-logo">A2T</div>
+      <button class="rail-btn" id="btn-add" title="添加文件">＋</button>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn" id="btn-settings" title="设置">⚙</button>
+    </nav>
+
+    <!-- 次级侧栏 -->
+    <aside class="sidebar">
+      <div class="sidebar-title">任务列表</div>
+      <ul class="nav-list">
+        <li class="nav-item active" data-filter="running">
+          <span class="nav-ico">▶</span><span class="nav-label">处理中</span>
+          <span class="badge" id="badge-running">0</span>
+        </li>
+        <li class="nav-item" data-filter="queued">
+          <span class="nav-ico">⏳</span><span class="nav-label">队列中</span>
+          <span class="badge" id="badge-queued">0</span>
+        </li>
+        <li class="nav-item" data-filter="done">
+          <span class="nav-ico">■</span><span class="nav-label">已完成</span>
+          <span class="badge" id="badge-done">0</span>
+        </li>
+      </ul>
+    </aside>
+
+    <!-- 主区 -->
+    <main class="content">
+      <header class="content-head">
+        <h1 id="view-title">处理中</h1>
+        <div class="head-actions">
+          <button class="btn ghost hidden" id="btn-clear-finished">🗑 清空记录</button>
+          <button class="btn ghost" id="btn-refresh" title="刷新列表">↻ 刷新</button>
+        </div>
+      </header>
+
+      <!-- 警告条 -->
+      <div id="warn-bar" class="warn-bar hidden"></div>
+
+      <!-- 任务区 -->
+      <section id="task-area" class="task-area">
+        <div class="empty" id="empty-state">
+          <div class="empty-art">🛸</div>
+          <div class="empty-text">当前没有任务</div>
+          <div class="empty-sub">把音频文件拖进来，或点击「＋ 添加」</div>
+        </div>
+        <div id="task-list" class="task-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 确认弹窗 -->
+  <div id="confirm-modal" class="modal-mask hidden">
+    <div class="modal wide">
+      <div class="modal-title">确认转写</div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label">这些音频有背景音乐吗？</label>
+          <div class="radio-row">
+            <label class="radio"><input type="radio" name="music" value="no" checked /> 没有（直接转写，更快）</label>
+            <label class="radio"><input type="radio" name="music" value="yes" /> 有（先分离人声，较慢）</label>
+          </div>
+          <p class="hint" id="music-hint"></p>
+        </div>
+
+        <div class="field">
+          <label class="field-label">待转写文件（<span id="confirm-count">0</span> 个）
+            <span class="field-sub">点右侧 📂 可单独设置某个文件的输出位置</span></label>
+          <div class="file-rows" id="confirm-file-rows"></div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">统一输出目录（可选）</label>
+          <div class="out-picker">
+            <input type="text" id="unified-path" class="text-input" readonly placeholder="设置后，全部文件统一输出到此处" />
+            <button class="btn ghost" id="btn-pick-unified">选择</button>
+            <button class="btn ghost" id="btn-clear-unified">清除</button>
+          </div>
+          <p class="hint">不设置时，未单独指定的文件使用设置里的默认目录。</p>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" id="confirm-cancel">取消</button>
+        <button class="btn primary" id="confirm-ok">确定开始</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置弹窗 -->
+  <div id="settings-modal" class="modal-mask hidden">
+    <div class="modal wide">
+      <div class="modal-title">设置</div>
+      <div class="modal-body">
+        <div class="field row-field">
+          <div>
+            <label class="field-label">Whisper 模型</label>
+            <div class="model-row">
+              <select id="set-whisper-model" class="select"></select>
+              <span id="whisper-model-status" class="status-tag"></span>
+              <button class="btn ghost tiny hidden" id="btn-dl-whisper">⬇ 下载</button>
+            </div>
+          </div>
+          <div>
+            <label class="field-label">Demucs 模型（音乐分离）</label>
+            <div class="model-row">
+              <select id="set-demucs-model" class="select"></select>
+              <span id="demucs-model-status" class="status-tag"></span>
+              <button class="btn ghost tiny hidden" id="btn-dl-demucs">⬇ 下载</button>
+            </div>
+          </div>
+        </div>
+        <p class="hint" id="model-dl-hint" style="display:none">⬆ 下载位置可在下方目录设置中修改</p>
+
+        <div class="field">
+          <label class="field-label">默认输出目录</label>
+          <div class="out-picker">
+            <input type="text" id="set-outdir" class="text-input" readonly />
+            <button class="btn ghost" data-pick="outDir">浏览</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label"><span id="whisper-dir-label">Whisper 模型目录</span> <span id="whisper-status" class="status-tag"></span></label>
+          <div class="out-picker">
+            <input type="text" id="set-whisper" class="text-input" readonly />
+            <button class="btn ghost" data-pick="whisperDir">浏览</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label"><span id="demucs-dir-label">Demucs 模型目录</span> <span id="demucs-status" class="status-tag"></span></label>
+          <div class="out-picker">
+            <input type="text" id="set-demucs" class="text-input" readonly />
+            <button class="btn ghost" data-pick="demucsCacheDir">浏览</button>
+          </div>
+          <p class="hint">用于"有背景音乐"时的人声分离模型。首次使用需联网下载（约数百 MB）。</p>
+        </div>
+        <div class="field">
+          <label class="field-label">Python 解释器 <span id="python-status" class="status-tag"></span></label>
+          <div class="out-picker">
+            <input type="text" id="set-python" class="text-input" readonly placeholder="留空将自动检测" />
+            <button class="btn ghost" id="btn-pick-python">浏览</button>
+          </div>
+          <p class="hint">需已 pip install faster-whisper demucs。GPU 加速需 CUDA 版 PyTorch。</p>
+        </div>
+        <div class="field">
+          <label class="field-label">ffmpeg 目录（可选）</label>
+          <div class="out-picker">
+            <input type="text" id="set-ffmpeg" class="text-input" readonly placeholder="留空则使用系统 PATH 中的 ffmpeg" />
+            <button class="btn ghost" data-pick="ffmpegDir">浏览</button>
+          </div>
+        </div>
+        <div class="field row-field">
+          <div>
+            <label class="field-label">主题</label>
+            <select id="set-theme" class="select">
+              <option value="dark">深色</option>
+              <option value="light">浅色</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">强调色</label>
+            <div class="accent-row">
+              <input type="color" id="set-accent" class="color-input" />
+              <button class="btn ghost tiny" id="reset-accent">恢复默认</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" id="settings-close">关闭</button>
+        <button class="btn primary" id="settings-save">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 任务详情弹窗 -->
+  <div id="detail-modal" class="modal-mask hidden">
+    <div class="modal">
+      <div class="modal-title">任务详情</div>
+      <div class="modal-body">
+        <div class="detail-name" id="detail-name"></div>
+        <div class="detail-progress"><div class="progress-fill" id="detail-fill"></div></div>
+        <div class="detail-pct" id="detail-pct"></div>
+        <div class="detail-status" id="detail-status">—</div>
+        <ul class="detail-list">
+          <li><span>当前步骤</span><b id="detail-step">—</b></li>
+          <li><span>转写进度</span><b id="detail-processed">—</b></li>
+          <li><span>文件时长</span><b id="detail-duration">—</b></li>
+          <li><span>预计耗时</span><b id="detail-eta">—</b></li>
+          <li><span>已用时</span><b id="detail-elapsed">—</b></li>
+          <li><span>含背景音乐</span><b id="detail-music">—</b></li>
+          <li><span>输出目录</span><b id="detail-outdir" class="ellip">—</b></li>
+        </ul>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" id="detail-open-folder" style="display:none">📂 打开文件夹</button>
+        <button class="btn primary" id="detail-close">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除已完成任务确认弹窗（方案A：三按钮）-->
+  <div id="remove-modal" class="modal-mask hidden">
+    <div class="modal">
+      <div class="modal-title">删除任务</div>
+      <div class="modal-body">
+        <p class="modal-files" id="remove-name"></p>
+        <p class="hint">这是一个已成功转写的任务，你想怎么删除？</p>
+      </div>
+      <div class="modal-foot col">
+        <button class="btn" id="remove-record-only">仅删除任务记录（保留文档）</button>
+        <button class="btn danger-btn" id="remove-with-file">删除记录并删除生成的文档</button>
+        <button class="btn ghost" id="remove-cancel">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
