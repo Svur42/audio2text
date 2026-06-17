@@ -454,11 +454,13 @@ const DEMUCS_MODELS = [
 ];
 
 function fillSelect(sel, options, current, downloadedSet) {
-  // downloadedSet: Set of downloaded model values (null = 不知道，不加前缀)
+  // downloadedSet: 已下载模型集合（null = 不加前缀）
+  // ● 前缀只加在「已下载且非当前选中」的项上：
+  //   - 选中项不加 ●（关闭时显示干净的名字，状态由左侧图标表示）
+  //   - 展开下拉时，其它已下载的项前面有 ●
   sel.innerHTML = options.map(([v, label]) => {
-    // ● 前缀：在 dropdown 打开时可见，表示该模型已下载（纯文字，无颜色限制）
     let prefix = '';
-    if (downloadedSet) prefix = downloadedSet.has(v) ? '● ' : '  ';
+    if (downloadedSet && v !== current) prefix = downloadedSet.has(v) ? '● ' : '　';
     return `<option value="${v}"${v === current ? ' selected' : ''}>${prefix}${label}</option>`;
   }).join('');
 }
@@ -495,24 +497,30 @@ async function refreshAllModelDropdowns() {
   const whisperDownloaded = new Set(whisperResults.filter(([, ok]) => ok).map(([v]) => v));
   fillSelect($('#set-whisper-model'), WHISPER_MODELS, currentWhisper, whisperDownloaded);
 
-  // Demucs：只能整体检测有无 .th，把当前选中的视为已下载（若有）
-  const demucsOk = await window.api.demucsModelStatus(demucsDir);
-  const demucsDownloaded = demucsOk ? new Set([currentDemucs]) : new Set();
+  // 并发检测所有 Demucs 模型（按签名精确判断每个）
+  const demucsResults = await Promise.all(
+    DEMUCS_MODELS.map(([v]) => window.api.demucsModelStatus(demucsDir, v).then(ok => [v, ok]))
+  );
+  const demucsDownloaded = new Set(demucsResults.filter(([, ok]) => ok).map(([v]) => v));
   fillSelect($('#set-demucs-model'), DEMUCS_MODELS, currentDemucs, demucsDownloaded);
 
-  // 刷新 status tag 和下载按钮
+  // 当前选中模型是否已下载
   const wOk = whisperDownloaded.has(currentWhisper);
+  const dOk = demucsDownloaded.has(currentDemucs);
+
+  // status tag（缩短文字，避免挤占下拉宽度）
   const wTag = $('#whisper-model-status');
-  if (wTag) { wTag.textContent = wOk ? '已下载' : '未下载，首次将下载'; wTag.className = `status-tag ${wOk?'ok':'miss'}`; }
+  if (wTag) { wTag.textContent = wOk ? '已下载' : '未下载'; wTag.className = `status-tag ${wOk?'ok':'miss'}`; }
   const dTag = $('#demucs-model-status');
-  if (dTag) { dTag.textContent = demucsOk ? '已下载' : '未下载，首次将下载'; dTag.className = `status-tag ${demucsOk?'ok':'miss'}`; }
+  if (dTag) { dTag.textContent = dOk ? '已下载' : '未下载'; dTag.className = `status-tag ${dOk?'ok':'miss'}`; }
   $('#btn-dl-whisper')?.classList.toggle('hidden', wOk);
-  $('#btn-dl-demucs')?.classList.toggle('hidden', demucsOk);
-  // ‖ 图标：始终显示表示"当前使用中"
+  $('#btn-dl-demucs')?.classList.toggle('hidden', dOk);
+
+  // 左侧外部图标：已下载(=使用中) → ‖ 双竖杠；未下载 → 空心圆
   const wi = $('#whisper-active-icon');
-  if (wi) wi.style.display = 'inline-flex';
+  if (wi) { wi.dataset.ok = wOk ? '1' : '0'; wi.title = wOk ? '已下载并使用中' : '未下载'; }
   const di = $('#demucs-active-icon');
-  if (di) di.style.display = 'inline-flex';
+  if (di) { di.dataset.ok = dOk ? '1' : '0'; di.title = dOk ? '已下载并使用中' : '未下载'; }
 }
 
 function updatePythonStatus() {

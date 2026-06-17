@@ -22,8 +22,8 @@ contextBridge.exposeInMainWorld('api', {
   // 模型状态
   whisperModelStatus: (whisperDir, modelName) =>
     ipcRenderer.invoke('model:whisperStatus', { whisperDir, modelName }),
-  demucsModelStatus: (demucsDir) =>
-    ipcRenderer.invoke('model:demucsStatus', { demucsDir }),
+  demucsModelStatus: (demucsDir, modelName) =>
+    ipcRenderer.invoke('model:demucsStatus', { demucsDir, modelName }),
 
   // 模型下载（fire-and-forget，进度通过事件推送）
   downloadModel: (payload) => ipcRenderer.send('model:download', payload),

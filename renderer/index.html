@@ -125,24 +125,22 @@
     <div class="modal wide">
       <div class="modal-title">设置</div>
       <div class="modal-body">
-        <div class="field row-field">
-          <div>
-            <label class="field-label">Whisper 模型</label>
-            <div class="model-row">
-              <span class="model-active-icon" id="whisper-active-icon"></span>
-              <select id="set-whisper-model" class="select"></select>
-              <span id="whisper-model-status" class="status-tag"></span>
-              <button class="btn ghost tiny hidden" id="btn-dl-whisper">⬇ 下载</button>
-            </div>
+        <div class="field">
+          <label class="field-label">Whisper 模型（音频转文字）</label>
+          <div class="model-row">
+            <span class="model-active-icon" id="whisper-active-icon"></span>
+            <select id="set-whisper-model" class="select"></select>
+            <span id="whisper-model-status" class="status-tag"></span>
+            <button class="btn ghost tiny hidden" id="btn-dl-whisper">⬇ 下载</button>
           </div>
-          <div>
-            <label class="field-label">Demucs 模型（音乐分离）</label>
-            <div class="model-row">
-              <span class="model-active-icon" id="demucs-active-icon"></span>
-              <select id="set-demucs-model" class="select"></select>
-              <span id="demucs-model-status" class="status-tag"></span>
-              <button class="btn ghost tiny hidden" id="btn-dl-demucs">⬇ 下载</button>
-            </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Demucs 模型（音乐/人声分离）</label>
+          <div class="model-row">
+            <span class="model-active-icon" id="demucs-active-icon"></span>
+            <select id="set-demucs-model" class="select"></select>
+            <span id="demucs-model-status" class="status-tag"></span>
+            <button class="btn ghost tiny hidden" id="btn-dl-demucs">⬇ 下载</button>
           </div>
         </div>
         <p class="hint" style="margin-bottom:16px">符号说明：左侧 <b>‖</b> = 当前使用中 &nbsp;·&nbsp; 下拉中 <b>●</b> = 已下载 &nbsp;·&nbsp; 下拉中无标记 = 未下载（转写时自动下载）</p>

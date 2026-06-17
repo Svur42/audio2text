@@ -148,6 +148,26 @@ function isWhisperModelDownloaded(whisperDir, modelName) {
   } catch (e) { return false; }
 }
 
+// Demucs 模型 → 权重签名映射（来自 demucs 包的 remote/*.yaml）
+const DEMUCS_SIGS = {
+  htdemucs: ['955717e8'],
+  htdemucs_ft: ['f7e0c4bc', 'd12395a8', '92cfc3b6', '04573f0d'],
+  htdemucs_6s: ['5c90dfd2'],
+  mdx_extra: ['e51eebcc', 'a1d90b5c', '5d2d6c55', 'cfa93e08'],
+  mdx_extra_q: ['83fc094f', '464b36d7', '14fc6a69', '7fd6ef75'],
+  mdx_q: ['6b9c2ca1', 'b72baf4e', '42e558d4', '305bc58f'],
+};
+
+// 某个 Demucs 模型是否已下载（其全部签名的 .th 文件都存在）
+function isDemucsModelDownloaded(demucsDir, modelName) {
+  const sigs = DEMUCS_SIGS[modelName];
+  if (!sigs) return false;
+  const ckpt = path.join(demucsDir, 'hub', 'checkpoints');
+  let files;
+  try { files = fs.readdirSync(ckpt); } catch (e) { return false; }
+  return sigs.every(sig => files.some(f => f.startsWith(sig) && f.endsWith('.th')));
+}
+
 // ---------------------------------------------------------------------------
 // 启动自检：python / pipeline.py / ffprobe
 // ---------------------------------------------------------------------------
@@ -574,14 +594,9 @@ ipcMain.handle('config:detectModels', () => detectModels());
 ipcMain.handle('model:whisperStatus', (_e, { whisperDir, modelName }) =>
   isWhisperModelDownloaded(whisperDir || loadConfig().whisperDir, modelName));
 
-// Demucs 模型是否已下载（demucs 4.x 用哈希文件名，无法按模型名匹配）
-// 策略：checkpoints 目录存在且有 .th 文件 = 已下载过至少一个 demucs 模型
-ipcMain.handle('model:demucsStatus', (_e, { demucsDir }) => {
-  const ckpt = path.join(demucsDir || loadConfig().demucsCacheDir, 'hub', 'checkpoints');
-  try {
-    return fs.readdirSync(ckpt).some(f => f.endsWith('.th'));
-  } catch (e) { return false; }
-});
+// Demucs 某模型是否已下载（按 yaml 签名精确判断）
+ipcMain.handle('model:demucsStatus', (_e, { demucsDir, modelName }) =>
+  isDemucsModelDownloaded(demucsDir || loadConfig().demucsCacheDir, modelName));
 
 // 下载模型（streaming 输出通过 webContents.send 推送）
 ipcMain.on('model:download', (event, { type, modelName, demucsModel, whisperDir, demucsDir, ffmpegDir }) => {
