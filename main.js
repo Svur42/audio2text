@@ -352,7 +352,7 @@ function startProcess(t, cfg, isRetry) {
     // CPU 模式警告（无 CUDA 时速度极慢）
     if (/计算设备：CPU/i.test(line)) {
       safeSend('app:warnings',
-        ['当前以 CPU 模式转写（未检测到 CUDA），速度较慢。建议在设置里切换为 small 或 medium 模型以提升速度。']);
+        ['当前以 CPU 模式运行（未检测到 CUDA GPU），转写和人声分离速度均较慢。建议在设置里切换为更小的模型以提升速度。']);
     }
 
     // 友好处理 Python 包缺失错误（从 stderr 捕获后推到 step）

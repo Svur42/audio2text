@@ -282,16 +282,19 @@ const WHISPER_MODELS = [
   ['large-v3-turbo', 'large-v3-turbo（推荐 · 快且质量高）'],
   ['large-v3',       'large-v3（最高质量 · 慢 · 显存高）'],
   ['large-v2',       'large-v2（老牌稳定）'],
-  ['medium',         'medium（中等 · 显存低友好）'],
-  ['small',          'small（轻量 · 更快）'],
-  ['base',           'base（很轻 · 快）'],
-  ['tiny',           'tiny（最轻最快 · 精度低）'],
-  ['distil-large-v3','distil-large-v3（蒸馏 · 快）'],
+  ['distil-large-v3','distil-large-v3（蒸馏 · 接近 large 质量 · 更快）'],
+  ['medium',         'medium（中等质量 · CPU 可用）'],
+  ['small',          'small（轻量 · CPU 友好）'],
+  ['base',           'base（极轻 · CPU 友好）'],
+  ['tiny',           'tiny（最轻最快 · 精度低 · CPU 首选）'],
 ];
 const DEMUCS_MODELS = [
-  ['htdemucs',    'htdemucs（默认 · 推荐）'],
-  ['htdemucs_ft', 'htdemucs_ft（更好 · 慢约 4 倍）'],
-  ['mdx_extra',   'mdx_extra（备选）'],
+  ['htdemucs',      'htdemucs（默认 · 推荐）'],
+  ['htdemucs_ft',   'htdemucs_ft（更好 · 慢约 4 倍）'],
+  ['htdemucs_6s',   'htdemucs_6s（分离 6 个声部 · 慢）'],
+  ['mdx_extra',     'mdx_extra（MDX 架构 · 备选）'],
+  ['mdx_extra_q',   'mdx_extra_q（量化版 · CPU 友好）'],
+  ['mdx_q',         'mdx_q（量化版 · CPU 友好）'],
 ];
 
 function fillSelect(sel, options, current) {
