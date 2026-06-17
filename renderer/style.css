@@ -122,31 +122,43 @@ html, body {
 /* ── Easter egg: UFO 飞右上角 + 斜向光束 ── */
 .ufo-wrap { display: inline-flex; flex-direction: column; align-items: center; }
 
-/* UFO 飞右上角：5 个关键帧模拟自然弧线 + 落定抖动 */
-@keyframes ufoFlyRight {
-  0%   { transform: translate(0, 0)         rotate(0deg)  scale(1);    }
-  18%  { transform: translate(40px, -75px)  rotate(10deg) scale(1.06); }
-  42%  { transform: translate(140px,-138px) rotate(18deg) scale(1.1);  }
-  72%  { transform: translate(230px,-158px) rotate(9deg)  scale(1.04); }
-  88%  { transform: translate(252px,-163px) rotate(7deg)  scale(1.02); } /* 轻微冲过 */
-  100% { transform: translate(244px,-158px) rotate(6deg)  scale(1);    } /* 落定 */
-}
-@keyframes ufoFlyBack {
-  0%   { transform: translate(244px,-158px) rotate(6deg)  scale(1);   }
-  22%  { transform: translate(180px,-120px) rotate(-5deg) scale(1.04);}
-  55%  { transform: translate(70px, -48px)  rotate(-8deg) scale(1.06);}
-  80%  { transform: translate(10px,  -8px)  rotate(-2deg) scale(1.02);}
-  92%  { transform: translate(-6px,   3px)  rotate(1deg)  scale(1.01);}  /* 小过冲 */
-  100% { transform: translate(0, 0)         rotate(0deg)  scale(1);   }
+/* 正常状态黄色光柱（随 UFO 倾斜） */
+.ufo-beam-normal {
+  position: absolute;
+  top: 80%; left: 50%; transform: translateX(-50%);
+  width: 26px; height: 50px;
+  background:
+    radial-gradient(ellipse 70% 30% at 50% 0%, rgba(255,230,70,0.8), transparent 90%),
+    linear-gradient(to bottom, rgba(255,210,40,0.5) 0%, transparent 100%);
+  clip-path: polygon(28% 0%, 72% 0%, 100% 100%, 0% 100%);
+  pointer-events: none;
 }
 
-/* 光束独立于 UFO，固定在 empty 右上区域向左下打光 */
+/* UFO 飞行：从倾斜状态(-44°)起始，弧线加速到右上方 */
+@keyframes ufoFlyRight {
+  0%   { transform: translate(0,0)          rotate(-44deg) scale(0.86); }
+  18%  { transform: translate(38px,-70px)   rotate(-20deg) scale(0.94); }
+  42%  { transform: translate(138px,-135px) rotate(8deg)   scale(1.02); }
+  72%  { transform: translate(228px,-154px) rotate(7deg)   scale(1.0);  }
+  88%  { transform: translate(250px,-160px) rotate(6deg)   scale(0.99); }
+  100% { transform: translate(242px,-154px) rotate(6deg)   scale(1.0);  }
+}
+@keyframes ufoFlyBack {
+  0%   { transform: translate(242px,-154px) rotate(6deg)   scale(1.0); }
+  22%  { transform: translate(176px,-116px) rotate(-2deg)  scale(1.02);}
+  55%  { transform: translate(66px, -44px)  rotate(-22deg) scale(1.04);}
+  80%  { transform: translate(6px,   -5px)  rotate(-40deg) scale(0.9); }
+  92%  { transform: translate(-3px,   3px)  rotate(-46deg) scale(0.87);}
+  100% { transform: translate(0,0)          rotate(-44deg) scale(0.86);}
+}
+
+/* 光束：绑定在 ufo-wrap 内，从 UFO 底部发出，-50° 角让 ☭ 落向屏幕中央 */
 .ufo-beam-wrap {
   position: absolute;
-  top: 5%; right: 6%;           /* 右上角，与 UFO 终点对齐 */
-  width: 220px; height: 340px;
+  top: 86%; left: 50%;
+  transform: translateX(-50%) rotate(-50deg);
   transform-origin: top center;
-  transform: rotate(32deg);      /* 向左下倾斜，光打向中央 */
+  width: 200px; height: 340px;
   pointer-events: none;
   opacity: 0;
 }
@@ -162,16 +174,15 @@ html, body {
   clip-path: polygon(47% 0%, 53% 0%, 53% 0%, 47% 0%);  /* 初始：顶端细线 */
 }
 
-/* 光束底部中央放符号（光打到的位置） */
+/* 光束底部放 SVG 符号 */
 .ufo-beam-symbol {
-  position: absolute; bottom: 10px; left: 50%;
+  position: absolute; bottom: 8px; left: 50%;
   transform: translateX(-50%) scale(0.5);
-  font-size: 90px; color: #cc0a0a; line-height: 1;
-  text-shadow:
-    0 0 22px rgba(255,20,20,1),
-    0 0 50px rgba(210,0,0,0.7),
-    0 0 90px rgba(180,0,0,0.4);
-  opacity: 0; filter: blur(12px);
+  opacity: 0; filter: blur(12px) drop-shadow(0 0 16px rgba(255,20,20,0.9));
+}
+/* SVG 发光效果 */
+.ufo-beam-symbol svg {
+  filter: drop-shadow(0 0 12px rgba(220,0,0,0.8)) drop-shadow(0 0 28px rgba(180,0,0,0.5));
 }
 
 /* 光束展开（从顶端细线向下扩散成锥形） */
@@ -281,6 +292,8 @@ html, body {
   opacity: 0.75;
   cursor: pointer;
   filter: drop-shadow(0 8px 18px rgba(0,0,0,0.45));
+  /* 正常状态倾斜约 -45° + 略微缩小 */
+  transform-origin: center center;
 }
 /* 碟形主体 */
 .ufo-disc {
@@ -319,7 +332,11 @@ html, body {
 }
 .empty-text { font-size: 15px; color: var(--text-dim); }
 .empty-sub { font-size: 13px; }
-@keyframes float { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-10px);} }
+/* float 带上倾斜角，使正常状态呈现 ~-45° 倾斜 */
+@keyframes float {
+  0%,100% { transform: rotate(-44deg) scale(0.86) translateY(0px); }
+  50%     { transform: rotate(-44deg) scale(0.86) translateY(-10px); }
+}
 
 /* ---------- 任务卡片 ---------- */
 .task-list { display: flex; flex-direction: column; gap: 12px; }

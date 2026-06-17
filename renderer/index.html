@@ -60,18 +60,36 @@
       <section id="task-area" class="task-area">
         <div class="empty" id="empty-state">
           <div class="ufo-wrap">
-            <!-- 自制 CSS UFO（无内置光束） -->
+            <!-- 自制 CSS UFO -->
             <div class="ufo-css" id="ufo-art">
               <div class="ufo-dome"></div>
               <div class="ufo-disc">
                 <div class="ufo-rim"></div>
               </div>
+              <!-- 正常状态黄色扫描光柱 -->
+              <div class="ufo-beam-normal"></div>
             </div>
-          </div>
-          <!-- 光束独立于 UFO，定位在 empty 区域右上方向下打光 -->
-          <div id="ufo-beam-wrap" class="ufo-beam-wrap">
-            <div class="ufo-beam-light"></div>
-            <div class="ufo-beam-symbol">☭</div>
+            <!-- 彩蛋光束：跟随 UFO 移动，角度 -50° 让 ☭ 落在屏幕中央 -->
+            <div id="ufo-beam-wrap" class="ufo-beam-wrap">
+              <div class="ufo-beam-light"></div>
+              <!-- 自绘 SVG 镰刀锤子，锤子/镰刀比例均衡 -->
+              <div class="ufo-beam-symbol">
+                <svg viewBox="0 0 100 100" width="96" height="96" xmlns="http://www.w3.org/2000/svg">
+                  <g stroke="#dd0000" stroke-linecap="round" fill="none">
+                    <!-- 镰刀弧刃：从左下扫到右上 -->
+                    <path d="M 24,80 A 38,38 0 0 1 76,28" stroke-width="10"/>
+                    <!-- 镰刀尖端钩 -->
+                    <path d="M 76,28 C 84,18 80,10 72,13" stroke-width="8"/>
+                    <!-- 镰刀柄 -->
+                    <line x1="24" y1="80" x2="12" y2="93" stroke-width="9"/>
+                    <!-- 锤子柄（斜向，更长更粗） -->
+                    <line x1="19" y1="75" x2="49" y2="45" stroke-width="9"/>
+                    <!-- 锤子头（垂直于柄，加粗以匹配镰刀视觉重量） -->
+                    <line x1="36" y1="33" x2="62" y2="57" stroke-width="19" stroke-linecap="round"/>
+                  </g>
+                </svg>
+              </div>
+            </div>
           </div>
           <div class="empty-text">当前没有任务</div>
           <div class="empty-sub">把音频文件拖进来，或点击「＋ 添加」</div>
