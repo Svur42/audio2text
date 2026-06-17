@@ -173,7 +173,6 @@ function bindEvents() {
   $$('input[name="music"]').forEach(r => r.addEventListener('change', updateMusicHint));
   $('#btn-pick-unified').addEventListener('click', pickUnifiedDir);
   $('#unified-path').addEventListener('click', pickUnifiedDir);   // 点 input 也触发
-  $('#btn-clear-unified').addEventListener('click', clearUnifiedDir);
   const ufSel = $('#unified-format');
   if (ufSel) ufSel.addEventListener('change', () => applyUnifiedFormat(ufSel.value));
   $('#btn-all-music')?.addEventListener('click', () => {
@@ -365,7 +364,13 @@ function renderConfirmRows() {
       if (d) { pendingOutDirs[idx] = d; renderConfirmRows(); }
     });
   wrap.querySelectorAll('[data-fmt-idx]').forEach(sel =>
-    sel.onchange = () => { pendingFormats[Number(sel.dataset.fmtIdx)] = sel.value; });
+    sel.onchange = () => {
+      pendingFormats[Number(sel.dataset.fmtIdx)] = sel.value;
+      // 自动更新统一格式：全部相同→设为该值，否则→"不统一"
+      const unique = [...new Set(pendingFormats)];
+      const uf = $('#unified-format');
+      if (uf) uf.value = unique.length === 1 ? unique[0] : '';
+    });
 }
 
 function applyUnifiedMusic(hasMusic) {
@@ -448,12 +453,11 @@ function fillSelect(sel, options, current, downloadedSet) {
   sel.innerHTML = options.map(([v, label]) => {
     let prefix = '';
     if (downloadedSet) {
-      if (v === current) prefix = '❙❙ ';          // 当前使用中（双竖杠）
+      if (v === current) prefix = '‖ ';             // 当前使用中（双竖杠单字符）
       else if (downloadedSet.has(v)) prefix = '● '; // 已下载（实心圆）
       else prefix = '○ ';                           // 未下载（空心圆）
     }
-    const suffix = v === current ? ' ← 使用中' : '';
-    return `<option value="${v}"${v === current ? ' selected' : ''}>${prefix}${label}${suffix}</option>`;
+    return `<option value="${v}"${v === current ? ' selected' : ''}>${prefix}${label}</option>`;
   }).join('');
 }
 

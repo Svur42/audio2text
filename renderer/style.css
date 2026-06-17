@@ -259,7 +259,7 @@ html, body {
   border-radius: 14px; box-shadow: var(--shadow);
   animation: pop 0.2s ease;
 }
-.modal.wide { width: min(560px, 92vw); }
+.modal.wide { width: min(560px, 92vw); max-width: 100%; }
 @keyframes pop { from { transform: scale(0.96); opacity: 0;} to { transform: none; opacity: 1;} }
 .modal-title { font-size: 17px; font-weight: 700; padding: 20px 22px 0; }
 .modal-body { padding: 18px 22px; max-height: 65vh; overflow-y: auto; overflow-x: hidden; }
@@ -286,7 +286,8 @@ html, body {
 .hint { font-size: 12px; color: var(--text-faint); margin-top: 6px; }
 
 .field-sub { font-weight: 400; font-size: 12px; color: var(--text-faint); margin-left: 8px; }
-.model-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.model-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.model-row .select { min-width: 0; flex: 1; max-width: 100%; }
 
 /* 确认弹窗里的迷你文件列表 */
 .file-rows {
@@ -314,15 +315,20 @@ html, body {
 }
 .fmt-row { display: flex; gap: 8px; }
 
-/* 音乐 dot 小圆点（批量文件列表用）——纯色填充，无文字 */
+/* 音乐 dot 小圆点 — 单选按钮风格：外圈 + 内核 */
 .music-dot {
-  flex-shrink: 0; width: 14px; height: 14px;
+  flex-shrink: 0; width: 16px; height: 16px;
   border-radius: 50%; border: 2px solid var(--border);
-  background: var(--border);
+  background: transparent; position: relative;
   cursor: pointer; transition: var(--trans); padding: 0;
 }
-.music-dot:hover { border-color: var(--accent); background: var(--accent-soft); }
-.music-dot.active { background: var(--accent); border-color: var(--accent); }
+.music-dot::after {
+  content: ''; position: absolute; inset: 3px;
+  border-radius: 50%; background: transparent; transition: var(--trans);
+}
+.music-dot:hover { border-color: var(--accent); }
+.music-dot.active { border-color: var(--accent); }
+.music-dot.active::after { background: var(--accent); }
 
 .music-dot-hint { font-size: 12px; color: var(--text-faint); }
 
@@ -346,8 +352,8 @@ html, body {
   border-radius: 8px; color: var(--text);
 }
 .select { cursor: pointer; }
-.row-field { display: flex; gap: 24px; }
-.row-field > div { flex: 1; }
+.row-field { display: flex; gap: 16px; flex-wrap: wrap; }
+.row-field > div { flex: 1; min-width: 160px; }
 .accent-row { display: flex; align-items: center; gap: 10px; }
 .color-input { width: 48px; height: 34px; border: 1px solid var(--border); border-radius: 8px; background: none; cursor: pointer; padding: 2px; }
 
