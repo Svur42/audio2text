@@ -118,7 +118,7 @@ function bindEvents() {
     setTimeout(() => btn.classList.remove('spinning'), 500);
   });
 
-  // 彩蛋：logo 连点 5 次 → 所有 accent 区域彩虹循环 8 秒后恢复
+  // 彩蛋：logo 连点 5 次 → 全屏彩虹 overlay + accent 同步旋转，8 秒后恢复
   let _logoClicks = 0, _logoTimer = null, _logoRainbow = false;
   $('.rail-logo').addEventListener('click', () => {
     _logoClicks++;
@@ -127,6 +127,9 @@ function bindEvents() {
     if (_logoClicks >= 5 && !_logoRainbow) {
       _logoClicks = 0;
       _logoRainbow = true;
+      const overlay = $('#rainbow-overlay');
+      if (overlay) overlay.classList.add('active');
+
       const baseAccent = config.accent || '#5b5bfa';
       const { h, s, l } = hexToHsl(baseAccent);
       const start = Date.now(), duration = 8000;
@@ -135,6 +138,7 @@ function bindEvents() {
         if (elapsed >= duration) {
           document.documentElement.style.setProperty('--accent', baseAccent);
           document.documentElement.style.setProperty('--accent-soft', hexToSoft(baseAccent));
+          if (overlay) overlay.classList.remove('active');
           _logoRainbow = false;
           return;
         }
@@ -954,62 +958,55 @@ function isRedAccent() {
   return inRedHue && s > 0.55 && l > 0.22 && l < 0.68;
 }
 
-// UFO 彩蛋动画序列
+// UFO 彩蛋动画序列（飞到右上角 → 斜向光束打向中央 → 恢复）
 function triggerUFOEaster() {
-  const wrap = $('.ufo-wrap');
   const ufoArt = $('#ufo-art');
   const beamWrap = $('#ufo-beam-wrap');
   const beamLight = beamWrap?.querySelector('.ufo-beam-light');
   const symbol = beamWrap?.querySelector('.ufo-beam-symbol');
-  if (!wrap || !beamWrap || !beamLight || !symbol) return;
+  if (!ufoArt || !beamWrap || !beamLight || !symbol) return;
 
-  // 暂停 float，开始下沉
-  wrap.classList.add('descending');
-  ufoArt.style.animation = 'ufoDescend 0.9s cubic-bezier(0.2,0,0.4,1) forwards';
-  ufoArt.style.animationPlayState = '';
+  // 初始化光束状态
+  beamWrap.style.opacity = '0';
+  beamLight.style.cssText = 'clip-path: polygon(47% 0%, 53% 0%, 53% 0%, 47% 0%); animation: none;';
+  symbol.style.cssText = 'opacity: 0; transform: translateX(-50%) scale(0.45); filter: blur(14px); animation: none;';
 
-  // 光束容器出现（透明度1）
-  beamWrap.style.opacity = '1';
-  beamLight.style.animation = 'none';
-  beamLight.style.clipPath = 'polygon(48% 0%, 52% 0%, 52% 0%, 48% 0%)';
-  symbol.style.animation = 'none';
-  symbol.style.opacity = '0';
+  // 0ms: UFO 暂停 float，开始飞向右上角（圆弧路径）
+  ufoArt.style.animation = 'ufoFlyRight 0.95s cubic-bezier(0.2,0,0.3,1) forwards';
 
-  // 400ms 后光束从顶端展开向下（光速传播）
+  // 650ms: UFO 快到位时，光束从顶端细线展开（光源就位后才有光）
   setTimeout(() => {
-    beamLight.style.animation = 'beamExpand 0.65s cubic-bezier(0.2,0,0.6,1) forwards';
-  }, 400);
+    beamWrap.style.opacity = '1';
+    beamLight.style.animation = 'beamExpand 0.7s cubic-bezier(0.15,0,0.5,1) forwards';
+  }, 650);
 
-  // 1050ms 后投影符号从模糊到清晰
+  // 1300ms: 光束充满锥形后，☭ 在光照区域从焦外慢慢清晰
   setTimeout(() => {
-    symbol.style.animation = 'symbolAppear 0.7s cubic-bezier(0.2,0,0.4,1) forwards';
-  }, 1050);
+    symbol.style.animation = 'symbolAppear 0.75s cubic-bezier(0.2,0,0.4,1) forwards';
+  }, 1300);
 
-  // 停留 3s 后，符号先消失（投影内容先关）
+  // 4500ms: ☭ 先消失（投影断开）
   setTimeout(() => {
     symbol.style.animation = 'symbolFade 0.5s ease-in forwards';
   }, 4500);
 
-  // 符号消失后光束从底部收回（断源，从下向上收）
+  // 5050ms: 光束从底部向上收回（断源）
   setTimeout(() => {
-    beamLight.style.animation = 'beamRetract 0.6s cubic-bezier(0.4,0,0.8,1) forwards';
-  }, 5000);
+    beamLight.style.animation = 'beamRetract 0.65s cubic-bezier(0.35,0,0.75,1) forwards';
+  }, 5050);
 
-  // 飞船上升
+  // 5450ms: 光束消失后 UFO 飞回中央
   setTimeout(() => {
-    ufoArt.style.animation = 'ufoAscend 0.85s cubic-bezier(0.3,0,0.5,1) forwards';
-  }, 5300);
-
-  // 全部恢复
-  setTimeout(() => {
-    wrap.classList.remove('descending');
     beamWrap.style.opacity = '0';
-    beamLight.style.animation = 'none';
-    beamLight.style.clipPath = 'polygon(48% 0%, 52% 0%, 52% 0%, 48% 0%)';
-    symbol.style.animation = 'none';
-    symbol.style.opacity = '0';
-    ufoArt.style.animation = '';  // 恢复 float 动画
-  }, 6300);
+    ufoArt.style.animation = 'ufoFlyBack 0.9s cubic-bezier(0.3,0,0.4,1) forwards';
+  }, 5750);
+
+  // 6800ms: 全部恢复，float 动画重启
+  setTimeout(() => {
+    ufoArt.style.animation = '';
+    beamLight.style.cssText = 'clip-path: polygon(47% 0%, 53% 0%, 53% 0%, 47% 0%); animation: none;';
+    symbol.style.cssText = 'opacity: 0; animation: none;';
+  }, 6800);
 }
 
 function hexToHsl(hex) {

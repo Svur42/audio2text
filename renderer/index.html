@@ -61,14 +61,17 @@
         <div class="empty" id="empty-state">
           <div class="ufo-wrap">
             <div class="empty-art" id="ufo-art">🛸</div>
-            <div class="ufo-beam-wrap" id="ufo-beam-wrap">
-              <div class="ufo-beam-light"></div>
-              <div class="ufo-beam-symbol">☭</div>
-            </div>
+          </div>
+          <!-- 光束独立于 UFO，定位在 empty 区域右上方向下打光 -->
+          <div id="ufo-beam-wrap" class="ufo-beam-wrap">
+            <div class="ufo-beam-light"></div>
+            <div class="ufo-beam-symbol">☭</div>
           </div>
           <div class="empty-text">当前没有任务</div>
           <div class="empty-sub">把音频文件拖进来，或点击「＋ 添加」</div>
         </div>
+        <!-- 彩虹全屏叠加层 -->
+        <div id="rainbow-overlay"></div>
         <div id="task-list" class="task-list"></div>
       </section>
     </main>

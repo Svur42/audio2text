@@ -113,58 +113,98 @@ html, body {
 .refresh-flyoff  { animation: refreshFlyOff  0.9s cubic-bezier(0.3,0,0.9,1)   forwards; pointer-events:none; }
 .refresh-flyback { animation: refreshFlyBack 0.65s cubic-bezier(0,0,0.15,1.7) forwards; }
 
-/* ── Easter egg: UFO 共产主义光束 ── */
-.ufo-wrap {
-  position: relative; display: inline-flex;
-  flex-direction: column; align-items: center;
+/* ── Easter egg: UFO 飞右上角 + 斜向光束 ── */
+.ufo-wrap { display: inline-flex; flex-direction: column; align-items: center; }
+
+/* UFO 飞到右上角的运动（先弧形抬升再向右加速） */
+@keyframes ufoFlyRight {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  35%  { transform: translate(80px, -100px) rotate(12deg); }
+  100% { transform: translate(250px, -160px) rotate(6deg); }
 }
+@keyframes ufoFlyBack {
+  0%   { transform: translate(250px, -160px) rotate(6deg); }
+  55%  { transform: translate(70px, -50px) rotate(-4deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+/* 光束独立于 UFO，固定在 empty 右上区域向左下打光 */
 .ufo-beam-wrap {
-  position: absolute; top: 78%; left: 50%;
-  transform: translateX(-50%); width: 160px; height: 180px;
-  pointer-events: none; display: flex;
-  flex-direction: column; align-items: center; justify-content: flex-end;
+  position: absolute;
+  top: 5%; right: 6%;           /* 右上角，与 UFO 终点对齐 */
+  width: 220px; height: 340px;
+  transform-origin: top center;
+  transform: rotate(32deg);      /* 向左下倾斜，光打向中央 */
+  pointer-events: none;
   opacity: 0;
 }
 .ufo-beam-light {
-  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  position: absolute; inset: 0;
   background:
-    radial-gradient(ellipse 60% 35% at 50% 0%,
-      rgba(220,20,20,0.75) 0%, rgba(220,20,20,0.3) 50%, transparent 100%),
-    linear-gradient(to bottom, rgba(200,10,10,0.45) 0%, rgba(180,0,0,0.12) 100%);
-  clip-path: polygon(48% 0%, 52% 0%, 52% 0%, 48% 0%);
+    radial-gradient(ellipse 55% 30% at 50% 0%,
+      rgba(220,15,15,0.8) 0%, rgba(200,10,10,0.35) 45%, transparent 100%),
+    linear-gradient(to bottom,
+      rgba(200,5,5,0.55) 0%,
+      rgba(180,0,0,0.18) 60%,
+      rgba(150,0,0,0.06) 100%);
+  clip-path: polygon(47% 0%, 53% 0%, 53% 0%, 47% 0%);  /* 初始：顶端细线 */
 }
+
+/* 光束底部中央放符号（光打到的位置） */
 .ufo-beam-symbol {
-  font-size: 52px; color: #cc1010;
-  text-shadow: 0 0 18px rgba(255,30,30,0.9), 0 0 40px rgba(200,0,0,0.55), 0 0 70px rgba(180,0,0,0.3);
-  opacity: 0; transform: scale(0.6); position: relative; z-index: 1;
-  line-height: 1; margin-bottom: 4px;
+  position: absolute; bottom: 10px; left: 50%;
+  transform: translateX(-50%) scale(0.5);
+  font-size: 82px; color: #cc0a0a; line-height: 1;
+  text-shadow:
+    0 0 22px rgba(255,20,20,1),
+    0 0 50px rgba(210,0,0,0.7),
+    0 0 90px rgba(180,0,0,0.4);
+  opacity: 0; filter: blur(12px);
 }
-@keyframes ufoDescend {
-  0%   { transform: translateY(0px) rotate(0deg); }
-  40%  { transform: translateY(20px) rotate(-2deg); }
-  100% { transform: translateY(32px) rotate(0deg); }
-}
-@keyframes ufoAscend {
-  0%   { transform: translateY(32px) rotate(0deg); }
-  60%  { transform: translateY(10px) rotate(1deg); }
-  100% { transform: translateY(0px) rotate(0deg); }
-}
+
+/* 光束展开（从顶端细线向下扩散成锥形） */
 @keyframes beamExpand {
-  0%   { clip-path: polygon(48% 0%, 52% 0%, 52% 0%, 48% 0%); }
-  100% { clip-path: polygon(34% 0%, 66% 0%, 100% 100%, 0% 100%); }
+  0%   { clip-path: polygon(47% 0%, 53% 0%, 53% 0%, 47% 0%); }
+  100% { clip-path: polygon(32% 0%, 68% 0%, 100% 100%, 0% 100%); }
 }
+/* 光束收回（从底部向上缩——断源物理） */
 @keyframes beamRetract {
-  0%   { clip-path: polygon(34% 0%, 66% 0%, 100% 100%, 0% 100%); }
-  100% { clip-path: polygon(48% 0%, 52% 0%, 52% 0%, 48% 0%); }
+  0%   { clip-path: polygon(32% 0%, 68% 0%, 100% 100%, 0% 100%); }
+  100% { clip-path: polygon(47% 0%, 53% 0%, 53% 0%, 47% 0%); }
 }
 @keyframes symbolAppear {
-  0%   { opacity: 0; transform: scale(0.55); filter: blur(8px); }
-  60%  { opacity: 0.85; filter: blur(2px); }
-  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+  0%   { opacity: 0; transform: translateX(-50%) scale(0.45); filter: blur(14px); }
+  55%  { filter: blur(3px); }
+  100% { opacity: 1; transform: translateX(-50%) scale(1); filter: blur(0); }
 }
 @keyframes symbolFade {
-  0%   { opacity: 1; transform: scale(1); filter: blur(0); }
-  100% { opacity: 0; transform: scale(0.7); filter: blur(6px); }
+  0%   { opacity: 1; transform: translateX(-50%) scale(1); filter: blur(0); }
+  100% { opacity: 0; transform: translateX(-50%) scale(0.65); filter: blur(10px); }
+}
+
+/* ── Easter egg: 彩虹全屏叠加 ── */
+#rainbow-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  pointer-events: none;
+  background: linear-gradient(100deg,
+    rgba(255,0,0,0.32) 0%,
+    rgba(255,130,0,0.28) 15%,
+    rgba(255,240,0,0.25) 30%,
+    rgba(0,210,0,0.25) 45%,
+    rgba(0,110,255,0.28) 60%,
+    rgba(130,0,255,0.28) 75%,
+    rgba(255,0,160,0.28) 88%,
+    rgba(255,0,0,0.32) 100%
+  );
+  background-size: 400% 100%;
+  animation: rainbowSweep 2.5s linear infinite;
+  opacity: 0;
+  transition: opacity 0.6s;
+}
+#rainbow-overlay.active { opacity: 1; }
+@keyframes rainbowSweep {
+  from { background-position: 0% 0; }
+  to   { background-position: 400% 0; }
 }
 
 .sidebar {
