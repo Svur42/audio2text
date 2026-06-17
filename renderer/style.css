@@ -313,6 +313,32 @@ html, body {
   border-radius: 6px; color: var(--text); cursor: pointer;
 }
 .fmt-row { display: flex; gap: 8px; }
+
+/* 音乐 dot 小圆点（批量文件列表用） */
+.music-dot {
+  flex-shrink: 0; width: 22px; height: 22px;
+  border-radius: 50%; border: 2px solid var(--border);
+  background: var(--bg-input); color: var(--text-faint);
+  font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--trans); padding: 0;
+}
+.music-dot:hover { border-color: var(--accent); }
+.music-dot.active {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+}
+
+/* 统一设置行 */
+.unified-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.unified-label { font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
+.unified-sep { flex: 1; min-width: 12px; }
+.single-name {
+  font-size: 13px; font-weight: 600; padding: 8px 10px;
+  background: var(--bg-input); border-radius: 8px;
+  word-break: break-all;
+}
 .file-row-dir.custom { color: var(--accent); }
 
 .out-picker { display: flex; gap: 8px; }

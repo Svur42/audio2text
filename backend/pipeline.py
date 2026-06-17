@@ -171,7 +171,10 @@ def transcribe(audio_path, stem, out_dir, model_dir, model_name, device, output_
         for start, end, text in segs:
             blocks.append(f"{fmt_time_vtt(start)} --> {fmt_time_vtt(end)}\n{text}")
         out_path.write_text("\n\n".join(blocks) + "\n", encoding="utf-8")
-    else:
+    elif output_format == "txt":
+        out_path = unique_path(out_dir, stem, ".txt")
+        out_path.write_text("\n".join(t for _, _, t in segs), encoding="utf-8")
+    else:  # 'md' 或默认
         out_path = unique_path(out_dir, stem, ".md")
         out_path.write_text("\n".join(t for _, _, t in segs), encoding="utf-8")
         cleanup_md(out_path)
@@ -254,7 +257,7 @@ if __name__ == "__main__":
     ap.add_argument("--model-name", default="large-v3-turbo", help="Whisper 模型名")
     ap.add_argument("--demucs-model", default="htdemucs", help="Demucs 模型名")
     ap.add_argument("--ffmpeg-dir", default=None, help="ffmpeg bin 目录(可选,缺省用 PATH)")
-    ap.add_argument("--output-format", default="txt", choices=["txt", "srt", "vtt"],
+    ap.add_argument("--output-format", default="md", choices=["md", "txt", "srt", "vtt"],
                     help="输出格式：txt 纯文本 / srt 字幕 / vtt 字幕（默认 txt）")
     ap.add_argument("--download-whisper", action="store_true", help="仅下载 Whisper 模型，不转写")
     ap.add_argument("--download-demucs", action="store_true", help="仅下载 Demucs 模型，不转写")

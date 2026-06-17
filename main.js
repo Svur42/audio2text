@@ -49,6 +49,7 @@ function getDefaults() {
     demucsCacheDir: path.join(os.homedir(), '.cache', 'torch'),
     whisperModel: 'large-v3-turbo',
     demucsModel: 'htdemucs',
+    defaultOutputFormat: 'md',  // md | txt | srt | vtt
     accent: '#5b5bfa',
     theme: 'dark',
   };
@@ -649,7 +650,7 @@ ipcMain.handle('tasks:add', (_e, { files, music, outDirs, outputFormats }) => {
   if (!Array.isArray(files) || !files.length) return false;
   files.forEach((f, i) => {
     const out = Array.isArray(outDirs) ? outDirs[i] : outDirs;
-    const fmt = Array.isArray(outputFormats) ? outputFormats[i] : (outputFormats || 'txt');
+    const fmt = Array.isArray(outputFormats) ? outputFormats[i] : (outputFormats || loadConfig().defaultOutputFormat || 'md');
     makeTask(f, music, out || loadConfig().outDir, fmt);
   });
   pushTaskState();

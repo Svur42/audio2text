@@ -8,7 +8,8 @@ let tasks = [];                 // 来自主进程的最新任务列表
 let currentFilter = 'running';  // running | queued | done
 let pendingFiles = [];          // 待确认的拖入/选择文件
 let pendingOutDirs = [];        // 与 pendingFiles 等长，每项=自定义输出目录或 null(默认)
-let pendingFormats = [];        // 与 pendingFiles 等长，每项='txt'|'srt'|'vtt'
+let pendingFormats = [];        // 与 pendingFiles 等长，每项='md'|'txt'|'srt'|'vtt'
+let pendingMusics = [];         // 与 pendingFiles 等长，每项=true/false（是否有背景音乐）
 let elapsedTimer = null;
 let detailTaskId = null;        // 当前打开详情的任务 id（null=未打开）
 let pendingRemoveId = null;     // 待确认删除的已完成任务 id
@@ -166,6 +167,8 @@ function bindEvents() {
   $('#btn-clear-unified').addEventListener('click', clearUnifiedDir);
   const ufSel = $('#unified-format');
   if (ufSel) ufSel.addEventListener('change', () => applyUnifiedFormat(ufSel.value));
+  $('#btn-all-music-yes')?.addEventListener('click', () => applyUnifiedMusic(true));
+  $('#btn-all-music-no')?.addEventListener('click', () => applyUnifiedMusic(false));
 
   // 任务详情
   $('#detail-close').addEventListener('click', closeDetail);
@@ -216,30 +219,103 @@ async function pickFiles() {
 // ---------------------------------------------------------------------------
 function openConfirm(files) {
   pendingFiles = files;
-  pendingOutDirs = files.map(() => null);      // null = 用默认目录
-  pendingFormats = files.map(() => 'txt');     // 每个文件的导出格式
+  const def = config.defaultOutputFormat || 'md';
+  pendingOutDirs = files.map(() => null);
+  pendingFormats = files.map(() => def);
+  pendingMusics = files.map(() => false);      // 默认无背景音乐
+
+  const isSingle = files.length === 1;
+  // 单文件和批量分别显示不同布局
+  $('#confirm-modal').dataset.mode = isSingle ? 'single' : 'batch';
+  $('#confirm-count').textContent = files.length;
+  const cc2 = $('#confirm-count2');
+  if (cc2) cc2.textContent = files.length;
+
+  // 重置统一选项
   $('input[name="music"][value="no"]').checked = true;
   $('#unified-path').value = '';
   const uf = $('#unified-format');
   if (uf) uf.value = '';
-  $('#confirm-count').textContent = files.length;
-  updateMusicHint();
-  renderConfirmRows();
+
+  // 批量专属区块的显隐
+  ['#confirm-batch-only'].forEach(sel => {
+    const el = $(sel);
+    if (el) el.classList.toggle('hidden', isSingle);
+  });
+  // 单文件专属区块
+  ['#confirm-single-only'].forEach(sel => {
+    const el = $(sel);
+    if (el) el.classList.toggle('hidden', !isSingle);
+  });
+
+  if (isSingle) {
+    renderSingleConfirm();
+  } else {
+    updateMusicHint();
+    renderConfirmRows();
+  }
   $('#confirm-modal').classList.remove('hidden');
+}
+
+function renderSingleConfirm() {
+  const f = pendingFiles[0];
+  const name = f.replace(/^.*[\\/]/, '');
+  const def = config.defaultOutputFormat || 'md';
+  const fmtOpts = Object.entries(FMT_LABELS).map(([v, l]) =>
+    `<option value="${v}"${v===def?' selected':''}>${l}</option>`).join('');
+  const el = $('#confirm-single-only');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="field">
+      <label class="field-label">文件</label>
+      <div class="single-name">${escapeHtml(name)}</div>
+    </div>
+    <div class="field">
+      <label class="field-label">有背景音乐？</label>
+      <div class="radio-row">
+        <label class="radio"><input type="radio" name="single-music" value="no" checked /> 没有</label>
+        <label class="radio"><input type="radio" name="single-music" value="yes" /> 有（先分离人声）</label>
+      </div>
+      <p class="hint" id="single-music-hint"></p>
+    </div>
+    <div class="field">
+      <label class="field-label">输出格式</label>
+      <select id="single-fmt" class="select">${fmtOpts}</select>
+    </div>
+    <div class="field">
+      <label class="field-label">输出目录</label>
+      <div class="out-picker">
+        <input type="text" id="single-outdir" class="text-input" readonly value="${escapeAttr(config.outDir||'')}" placeholder="默认目录" />
+        <button class="btn ghost" id="btn-single-pick">浏览</button>
+      </div>
+    </div>`;
+  // 绑定
+  const musicHint = () => {
+    const yes = el.querySelector('input[name="single-music"][value="yes"]').checked;
+    $('#single-music-hint').textContent = yes ? '首次需联网下载分离模型（约数百 MB）' : '';
+  };
+  el.querySelectorAll('input[name="single-music"]').forEach(r => r.addEventListener('change', musicHint));
+  el.querySelector('#btn-single-pick').addEventListener('click', async () => {
+    const d = await window.api.pickDir();
+    if (d) el.querySelector('#single-outdir').value = d;
+  });
 }
 function closeConfirm() {
   $('#confirm-modal').classList.add('hidden');
   pendingFiles = [];
   pendingOutDirs = [];
+  pendingFormats = [];
+  pendingMusics = [];
 }
 function updateMusicHint() {
-  const yes = $('input[name="music"][value="yes"]').checked;
-  $('#music-hint').textContent = yes
+  const yes = $('input[name="music"][value="yes"]')?.checked;
+  const hint = $('#music-hint');
+  if (hint) hint.textContent = yes
     ? '首次使用需联网下载人声分离模型（约数百 MB），过程中无进度显示，请耐心等待。'
     : '';
 }
 
-const FMT_LABELS = { txt: '纯文本', srt: 'SRT 字幕', vtt: 'VTT 字幕' };
+const FMT_LABELS = { md: 'Markdown (.md)', txt: '纯文本 (.txt)', srt: 'SRT 字幕', vtt: 'VTT 字幕' };
 
 function renderConfirmRows() {
   const wrap = $('#confirm-file-rows');
@@ -248,16 +324,24 @@ function renderConfirmRows() {
     const dir = pendingOutDirs[i];
     const dirTxt = dir ? escapeHtml(dir) : '默认目录';
     const dirCls = dir ? 'file-row-dir custom' : 'file-row-dir';
-    const fmt = pendingFormats[i] || 'txt';
-    const fmtOpts = ['txt','srt','vtt'].map(v =>
-      `<option value="${v}"${v===fmt?' selected':''}>${FMT_LABELS[v]}</option>`).join('');
+    const fmt = pendingFormats[i] || config.defaultOutputFormat || 'md';
+    const hasMusic = pendingMusics[i];
+    const fmtOpts = Object.entries(FMT_LABELS).map(([v,l]) =>
+      `<option value="${v}"${v===fmt?' selected':''}>${l}</option>`).join('');
     return `<div class="file-row" data-idx="${i}">
+      <button class="music-dot${hasMusic?' active':''}" data-music-idx="${i}" title="${hasMusic?'有背景音乐（点击取消）':'无背景音乐（点击开启分离）'}">🎵</button>
       <span class="file-row-name" title="${escapeAttr(name)}">${escapeHtml(name)}</span>
       <select class="file-fmt-sel select-tiny" data-fmt-idx="${i}">${fmtOpts}</select>
       <span class="${dirCls}" title="${escapeAttr(dir || '默认目录')}">${dirTxt}</span>
       <button class="icon-btn" data-pick-file="${i}" title="设置此文件的输出位置">📂</button>
     </div>`;
   }).join('');
+  wrap.querySelectorAll('[data-music-idx]').forEach(b =>
+    b.onclick = () => {
+      const idx = Number(b.dataset.musicIdx);
+      pendingMusics[idx] = !pendingMusics[idx];
+      renderConfirmRows();
+    });
   wrap.querySelectorAll('[data-pick-file]').forEach(b =>
     b.onclick = async () => {
       const idx = Number(b.dataset.pickFile);
@@ -266,6 +350,11 @@ function renderConfirmRows() {
     });
   wrap.querySelectorAll('[data-fmt-idx]').forEach(sel =>
     sel.onchange = () => { pendingFormats[Number(sel.dataset.fmtIdx)] = sel.value; });
+}
+
+function applyUnifiedMusic(hasMusic) {
+  pendingMusics = pendingMusics.map(() => hasMusic);
+  renderConfirmRows();
 }
 
 function applyUnifiedFormat(fmt) {
@@ -288,12 +377,32 @@ function clearUnifiedDir() {
 }
 
 async function confirmStart() {
-  const music = $('input[name="music"][value="yes"]').checked;
-  const outDirs = pendingOutDirs.map(d => d || config.outDir);
-  const outputFormats = pendingFormats.slice();
-  await window.api.addTasks({ files: pendingFiles, music, outDirs, outputFormats });
+  const isSingle = pendingFiles.length === 1;
+  let outDirs, outputFormats, musics;
+  if (isSingle) {
+    const el = $('#confirm-single-only');
+    const musicYes = el && el.querySelector('input[name="single-music"][value="yes"]').checked;
+    const fmt = el ? (el.querySelector('#single-fmt').value || config.defaultOutputFormat || 'md') : 'md';
+    const dir = el ? (el.querySelector('#single-outdir').value || config.outDir) : config.outDir;
+    outDirs = [dir];
+    outputFormats = [fmt];
+    musics = [musicYes];
+  } else {
+    outDirs = pendingOutDirs.map(d => d || config.outDir);
+    outputFormats = pendingFormats.slice();
+    musics = pendingMusics.slice();
+  }
+  // 批量逐文件发送（每个文件可有不同 music 设置）
+  for (let i = 0; i < pendingFiles.length; i++) {
+    await window.api.addTasks({
+      files: [pendingFiles[i]],
+      music: musics[i],
+      outDirs: [outDirs[i]],
+      outputFormats: [outputFormats[i]],
+    });
+  }
   closeConfirm();
-  $('.nav-item[data-filter="running"]').click();   // 切到处理中视图
+  $('.nav-item[data-filter="running"]').click();
 }
 
 // ---------------------------------------------------------------------------
@@ -331,6 +440,8 @@ function openSettings() {
   $('#set-demucs').value = config.demucsCacheDir || '';
   $('#set-python').value = config.pythonPath || '';
   $('#set-ffmpeg').value = config.ffmpegDir || '';
+  const defFmt = $('#set-default-fmt');
+  if (defFmt) defFmt.value = config.defaultOutputFormat || 'md';
   $('#set-theme').value = config.theme || 'dark';
   $('#set-accent').value = config.accent || '#5b5bfa';
   updatePythonStatus();
@@ -411,6 +522,7 @@ async function saveSettings() {
     demucsCacheDir: $('#set-demucs').value,
     pythonPath: $('#set-python').value,
     ffmpegDir: $('#set-ffmpeg').value,
+    defaultOutputFormat: $('#set-default-fmt')?.value || 'md',
     theme: $('#set-theme').value,
     accent: $('#set-accent').value,
   };

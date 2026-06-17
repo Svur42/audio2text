@@ -71,45 +71,49 @@
   <!-- 确认弹窗 -->
   <div id="confirm-modal" class="modal-mask hidden">
     <div class="modal wide">
-      <div class="modal-title">确认转写</div>
+      <div class="modal-title">确认转写
+        <span class="field-sub" id="confirm-count-label">（<span id="confirm-count">0</span> 个文件）</span>
+      </div>
       <div class="modal-body">
-        <div class="field">
-          <label class="field-label">这些音频有背景音乐吗？</label>
-          <div class="radio-row">
-            <label class="radio"><input type="radio" name="music" value="no" checked /> 没有（直接转写，更快）</label>
-            <label class="radio"><input type="radio" name="music" value="yes" /> 有（先分离人声，较慢）</label>
-          </div>
-          <p class="hint" id="music-hint"></p>
-        </div>
+        <!-- 单文件专属区块 -->
+        <div id="confirm-single-only" class="hidden"></div>
 
-        <div class="field">
-          <label class="field-label">待转写文件（<span id="confirm-count">0</span> 个）
-            <span class="field-sub">点右侧 📂 可单独设置某个文件的输出位置</span></label>
-          <div class="file-rows" id="confirm-file-rows"></div>
-        </div>
-
-        <div class="field">
-          <label class="field-label">统一输出目录（可选）</label>
-          <div class="out-picker">
-            <input type="text" id="unified-path" class="text-input" readonly placeholder="设置后，全部文件统一输出到此处" />
-            <button class="btn ghost" id="btn-pick-unified">选择</button>
-            <button class="btn ghost" id="btn-clear-unified">清除</button>
+        <!-- 批量专属区块 -->
+        <div id="confirm-batch-only">
+          <div class="field">
+            <label class="field-label">待转写文件（<span id="confirm-count2">0</span> 个）
+              <span class="field-sub">🎵 点亮 = 有背景音乐需分离 · 📂 改输出目录</span></label>
+            <div class="file-rows" id="confirm-file-rows"></div>
           </div>
-          <p class="hint">不设置时，未单独指定的文件使用设置里的默认目录。</p>
-        </div>
 
-        <div class="field">
-          <label class="field-label">统一导出格式（可选）
-            <span class="field-sub">设置后覆盖每行的单独选择</span></label>
-          <div class="fmt-row">
-            <select id="unified-format" class="select">
-              <option value="">不统一（各自选择）</option>
-              <option value="txt">全部 纯文本 .md</option>
-              <option value="srt">全部 SRT 字幕（视频剪辑/字幕制作）</option>
-              <option value="vtt">全部 VTT 字幕（YouTube/网页）</option>
-            </select>
+          <div class="field">
+            <label class="field-label">统一设置（可选，覆盖上方所有行）</label>
+            <div class="unified-row">
+              <span class="unified-label">背景音乐：</span>
+              <button class="btn ghost tiny" id="btn-all-music-yes">🎵 全部有</button>
+              <button class="btn ghost tiny" id="btn-all-music-no">全部无</button>
+              <span class="unified-sep"></span>
+              <span class="unified-label">输出目录：</span>
+              <input type="text" id="unified-path" class="text-input" readonly placeholder="统一目录（可选）" />
+              <button class="btn ghost" id="btn-pick-unified">选择</button>
+              <button class="btn ghost" id="btn-clear-unified">清除</button>
+            </div>
           </div>
-        </div>
+
+          <div class="field">
+            <label class="field-label">统一导出格式（可选）
+              <span class="field-sub">设置后覆盖每行的单独选择</span></label>
+            <div class="fmt-row">
+              <select id="unified-format" class="select">
+                <option value="">不统一（各自选择）</option>
+                <option value="md">全部 Markdown (.md)</option>
+                <option value="txt">全部 纯文本 (.txt)</option>
+                <option value="srt">全部 SRT 字幕（视频剪辑/字幕制作）</option>
+                <option value="vtt">全部 VTT 字幕（YouTube/网页）</option>
+              </select>
+            </div>
+          </div>
+        </div><!-- /confirm-batch-only -->
       </div>
       <div class="modal-foot">
         <button class="btn ghost" id="confirm-cancel">取消</button>
@@ -179,6 +183,17 @@
             <input type="text" id="set-ffmpeg" class="text-input" readonly placeholder="留空则使用系统 PATH 中的 ffmpeg" />
             <button class="btn ghost" data-pick="ffmpegDir">浏览</button>
           </div>
+          <p class="hint">ffmpeg 用于读取音频时长（预计耗时功能）。转写本身不依赖它，不设置也能正常转写。</p>
+        </div>
+        <div class="field">
+          <label class="field-label">默认输出格式</label>
+          <select id="set-default-fmt" class="select">
+            <option value="md">Markdown (.md)</option>
+            <option value="txt">纯文本 (.txt)</option>
+            <option value="srt">SRT 字幕（视频剪辑/字幕制作）</option>
+            <option value="vtt">VTT 字幕（YouTube/网页）</option>
+          </select>
+          <p class="hint">每次添加文件时的默认选项，可在确认弹窗里单独修改。</p>
         </div>
         <div class="field row-field">
           <div>
