@@ -498,7 +498,7 @@ async function refreshAllModelDropdowns() {
   const demucsDownloaded = demucsOk ? new Set([currentDemucs]) : new Set();
   fillSelect($('#set-demucs-model'), DEMUCS_MODELS, currentDemucs, demucsDownloaded);
 
-  // 刷新 status tag 和下载按钮
+  // 刷新 status tag、下载按钮、active icon
   const wOk = whisperDownloaded.has(currentWhisper);
   const wTag = $('#whisper-model-status');
   if (wTag) { wTag.textContent = wOk ? '已下载' : '未下载，首次将下载'; wTag.className = `status-tag ${wOk?'ok':'miss'}`; }
@@ -506,6 +506,9 @@ async function refreshAllModelDropdowns() {
   if (dTag) { dTag.textContent = demucsOk ? '已下载' : '未下载，首次将下载'; dTag.className = `status-tag ${demucsOk?'ok':'miss'}`; }
   $('#btn-dl-whisper')?.classList.toggle('hidden', wOk);
   $('#btn-dl-demucs')?.classList.toggle('hidden', demucsOk);
+  // active icon 始终显示（表示"当前使用"）
+  const wi = $('#whisper-active-icon'); if (wi) wi.style.display = 'inline-flex';
+  const di = $('#demucs-active-icon');  if (di) di.style.display = 'inline-flex';
 }
 
 function updatePythonStatus() {

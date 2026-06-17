@@ -288,6 +288,18 @@ html, body {
 .field-sub { font-weight: 400; font-size: 12px; color: var(--text-faint); margin-left: 8px; }
 .model-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .model-row .select { min-width: 0; flex: 1; max-width: 100%; }
+/* 当前使用中图标：两条短竖线（CSS 画，可控尺寸和间距）*/
+.model-active-icon {
+  flex-shrink: 0; display: inline-flex; align-items: center;
+  gap: 2px; height: 14px;
+}
+.model-active-icon::before,
+.model-active-icon::after {
+  content: ''; display: block;
+  width: 2px; height: 10px;
+  background: var(--accent); border-radius: 1px;
+}
+/* 默认隐藏，由 JS 控制显隐 */
 
 /* 确认弹窗里的迷你文件列表 */
 .file-rows {
