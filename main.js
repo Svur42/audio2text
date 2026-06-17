@@ -241,7 +241,7 @@ let taskSeq = 0;
 const tasks = new Map();           // id -> task
 let runningId = null;
 
-function makeTask(file, music, outDir) {
+function makeTask(file, music, outDir, outputFormat) {
   const id = ++taskSeq;
   const t = {
     id,
@@ -249,6 +249,7 @@ function makeTask(file, music, outDir) {
     name: path.basename(file),
     music: !!music,
     outDir,
+    outputFormat: outputFormat || 'txt',   // 'txt' | 'srt' | 'vtt'
     status: 'queued',             // queued | running | done | error | canceled
     pct: 0,
     step: '',
@@ -277,7 +278,7 @@ function safeSend(channel, ...args) {
 function pushTaskState() {
   if (!mainWin || mainWin.isDestroyed() || mainWin.webContents.isDestroyed()) return;
   const list = [...tasks.values()].map(t => ({
-    id: t.id, name: t.name, music: t.music, outDir: t.outDir,
+    id: t.id, name: t.name, music: t.music, outDir: t.outDir, outputFormat: t.outputFormat,
     status: t.status, pct: Math.min(100, t.pct || 0), step: t.step,  // #8: 百分比上限 100
     durationMin: t.durationMin, etaMin: t.etaMin, startTs: t.startTs,
     outFile: t.outFile, indeterminate: t.indeterminate,
@@ -330,6 +331,7 @@ function buildArgs(t, cfg) {
   if (cfg.whisperModel) args.push('--model-name', cfg.whisperModel);
   if (cfg.demucsModel) args.push('--demucs-model', cfg.demucsModel);
   if (cfg.ffmpegDir) args.push('--ffmpeg-dir', cfg.ffmpegDir);
+  if (t.outputFormat && t.outputFormat !== 'txt') args.push('--output-format', t.outputFormat);
   return args;
 }
 
@@ -642,12 +644,13 @@ ipcMain.handle('dialog:pickFiles', async () => {
   return r.canceled ? [] : r.filePaths;
 });
 
-ipcMain.handle('tasks:add', (_e, { files, music, outDirs }) => {
-  // outDirs: null（用各 task 默认）或字符串数组（与 files 等长）
+ipcMain.handle('tasks:add', (_e, { files, music, outDirs, outputFormats }) => {
+  // outDirs / outputFormats: null(用默认) 或与 files 等长的数组
   if (!Array.isArray(files) || !files.length) return false;
   files.forEach((f, i) => {
     const out = Array.isArray(outDirs) ? outDirs[i] : outDirs;
-    makeTask(f, music, out || loadConfig().outDir);
+    const fmt = Array.isArray(outputFormats) ? outputFormats[i] : (outputFormats || 'txt');
+    makeTask(f, music, out || loadConfig().outDir, fmt);
   });
   pushTaskState();
   runNext();

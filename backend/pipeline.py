@@ -96,17 +96,35 @@ def cleanup_md(path):
     path.write_text("\n".join(cleaned), encoding="utf-8")
 
 
-def unique_md_path(out_dir, stem):
+def unique_path(out_dir, stem, ext):
     """同名冲突时追加 _2、_3...（写文件前一刻调用，避免覆盖）。"""
-    md_path = out_dir / f"{stem}.md"
-    if not md_path.exists():
-        return md_path
+    p0 = out_dir / f"{stem}{ext}"
+    if not p0.exists():
+        return p0
     n = 2
     while True:
-        cand = out_dir / f"{stem}_{n}.md"
+        cand = out_dir / f"{stem}_{n}{ext}"
         if not cand.exists():
             return cand
         n += 1
+
+
+def fmt_time_srt(seconds):
+    """秒 → SRT 时间戳 HH:MM:SS,mmm"""
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    ms = int(round((seconds - int(seconds)) * 1000))
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def fmt_time_vtt(seconds):
+    """秒 → VTT 时间戳 HH:MM:SS.mmm"""
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    ms = int(round((seconds - int(seconds)) * 1000))
+    return f"{h:02d}:{m:02d}:{s:02d}.{ms:03d}"
 
 
 def has_whisper_model(model_dir, model_name):
@@ -120,7 +138,7 @@ def has_whisper_model(model_dir, model_name):
     return False
 
 
-def transcribe(audio_path, stem, out_dir, model_dir, model_name, device):
+def transcribe(audio_path, stem, out_dir, model_dir, model_name, device, output_format="txt"):
     from faster_whisper import WhisperModel
     if has_whisper_model(model_dir, model_name):
         p("Whisper 模型已就绪，正在加载...")
@@ -132,18 +150,33 @@ def transcribe(audio_path, stem, out_dir, model_dir, model_name, device):
     p("转写中...")
     segments, info = model.transcribe(str(audio_path), beam_size=5)
 
-    lines = []
+    segs = []
     total = info.duration
     for seg in segments:
-        lines.append(seg.text.strip())
+        segs.append((seg.start, seg.end, seg.text.strip()))
         pct = int(seg.end / total * 100) if total else 0
         p(f"  {pct}%  [{seg.end:.0f}s / {total:.0f}s]")
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    md_path = unique_md_path(out_dir, stem)
-    md_path.write_text("\n".join(lines), encoding="utf-8")
-    cleanup_md(md_path)
-    p(f"转写完成：{md_path}")
+
+    if output_format == "srt":
+        out_path = unique_path(out_dir, stem, ".srt")
+        blocks = []
+        for i, (start, end, text) in enumerate(segs, 1):
+            blocks.append(f"{i}\n{fmt_time_srt(start)} --> {fmt_time_srt(end)}\n{text}")
+        out_path.write_text("\n\n".join(blocks) + "\n", encoding="utf-8")
+    elif output_format == "vtt":
+        out_path = unique_path(out_dir, stem, ".vtt")
+        blocks = ["WEBVTT\n"]
+        for start, end, text in segs:
+            blocks.append(f"{fmt_time_vtt(start)} --> {fmt_time_vtt(end)}\n{text}")
+        out_path.write_text("\n\n".join(blocks) + "\n", encoding="utf-8")
+    else:
+        out_path = unique_path(out_dir, stem, ".md")
+        out_path.write_text("\n".join(t for _, _, t in segs), encoding="utf-8")
+        cleanup_md(out_path)
+
+    p(f"转写完成：{out_path}")
 
 
 def needs_safe_copy(path):
@@ -157,7 +190,7 @@ def needs_safe_copy(path):
         return True
 
 
-def run(input_file, with_music, out_dir, model_dir, model_name, demucs_model, device):
+def run(input_file, with_music, out_dir, model_dir, model_name, demucs_model, device, output_format="txt"):
     inp = Path(input_file)
     stem = inp.stem
     if stem.endswith('_音频'):
@@ -202,10 +235,10 @@ def run(input_file, with_music, out_dir, model_dir, model_name, demucs_model, de
                     p(f"未找到人声文件：{vocals}")
                     sys.exit(1)
                 p("第 2 步 / 共 2 步：正在转写人声...")
-                transcribe(vocals, stem, out_dir, model_dir, model_name, device)
+                transcribe(vocals, stem, out_dir, model_dir, model_name, device, output_format)
         else:
             p("第 1 步 / 共 1 步：正在转写...")
-            transcribe(work_inp, stem, out_dir, model_dir, model_name, device)
+            transcribe(work_inp, stem, out_dir, model_dir, model_name, device, output_format)
     finally:
         if tmp_copy and tmp_copy.exists():
             tmp_copy.unlink()
@@ -221,6 +254,8 @@ if __name__ == "__main__":
     ap.add_argument("--model-name", default="large-v3-turbo", help="Whisper 模型名")
     ap.add_argument("--demucs-model", default="htdemucs", help="Demucs 模型名")
     ap.add_argument("--ffmpeg-dir", default=None, help="ffmpeg bin 目录(可选,缺省用 PATH)")
+    ap.add_argument("--output-format", default="txt", choices=["txt", "srt", "vtt"],
+                    help="输出格式：txt 纯文本 / srt 字幕 / vtt 字幕（默认 txt）")
     ap.add_argument("--download-whisper", action="store_true", help="仅下载 Whisper 模型，不转写")
     ap.add_argument("--download-demucs", action="store_true", help="仅下载 Demucs 模型，不转写")
     a = ap.parse_args()
@@ -268,4 +303,4 @@ if __name__ == "__main__":
     out_dir = Path(a.out_dir) if a.out_dir else DEFAULT_OUT_DIR
     device = pick_device()
     p(f"计算设备：{device.upper()}")
-    run(a.file, a.music, out_dir, model_dir, a.model_name, a.demucs_model, device)
+    run(a.file, a.music, out_dir, model_dir, a.model_name, a.demucs_model, device, a.output_format)

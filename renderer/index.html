@@ -97,6 +97,19 @@
           </div>
           <p class="hint">不设置时，未单独指定的文件使用设置里的默认目录。</p>
         </div>
+
+        <div class="field">
+          <label class="field-label">统一导出格式（可选）
+            <span class="field-sub">设置后覆盖每行的单独选择</span></label>
+          <div class="fmt-row">
+            <select id="unified-format" class="select">
+              <option value="">不统一（各自选择）</option>
+              <option value="txt">全部 纯文本 .md</option>
+              <option value="srt">全部 SRT 字幕（视频剪辑/字幕制作）</option>
+              <option value="vtt">全部 VTT 字幕（YouTube/网页）</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div class="modal-foot">
         <button class="btn ghost" id="confirm-cancel">取消</button>
@@ -206,6 +219,7 @@
           <li><span>文件时长</span><b id="detail-duration">—</b></li>
           <li><span>预计耗时</span><b id="detail-eta">—</b></li>
           <li><span>已用时</span><b id="detail-elapsed">—</b></li>
+          <li><span>导出格式</span><b id="detail-fmt">—</b></li>
           <li><span>含背景音乐</span><b id="detail-music">—</b></li>
           <li><span>输出目录</span><b id="detail-outdir" class="ellip">—</b></li>
         </ul>

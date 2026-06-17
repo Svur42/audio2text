@@ -8,6 +8,7 @@ let tasks = [];                 // 来自主进程的最新任务列表
 let currentFilter = 'running';  // running | queued | done
 let pendingFiles = [];          // 待确认的拖入/选择文件
 let pendingOutDirs = [];        // 与 pendingFiles 等长，每项=自定义输出目录或 null(默认)
+let pendingFormats = [];        // 与 pendingFiles 等长，每项='txt'|'srt'|'vtt'
 let elapsedTimer = null;
 let detailTaskId = null;        // 当前打开详情的任务 id（null=未打开）
 let pendingRemoveId = null;     // 待确认删除的已完成任务 id
@@ -163,6 +164,8 @@ function bindEvents() {
   $$('input[name="music"]').forEach(r => r.addEventListener('change', updateMusicHint));
   $('#btn-pick-unified').addEventListener('click', pickUnifiedDir);
   $('#btn-clear-unified').addEventListener('click', clearUnifiedDir);
+  const ufSel = $('#unified-format');
+  if (ufSel) ufSel.addEventListener('change', () => applyUnifiedFormat(ufSel.value));
 
   // 任务详情
   $('#detail-close').addEventListener('click', closeDetail);
@@ -214,8 +217,11 @@ async function pickFiles() {
 function openConfirm(files) {
   pendingFiles = files;
   pendingOutDirs = files.map(() => null);      // null = 用默认目录
+  pendingFormats = files.map(() => 'txt');     // 每个文件的导出格式
   $('input[name="music"][value="no"]').checked = true;
   $('#unified-path').value = '';
+  const uf = $('#unified-format');
+  if (uf) uf.value = '';
   $('#confirm-count').textContent = files.length;
   updateMusicHint();
   renderConfirmRows();
@@ -233,6 +239,8 @@ function updateMusicHint() {
     : '';
 }
 
+const FMT_LABELS = { txt: '纯文本', srt: 'SRT 字幕', vtt: 'VTT 字幕' };
+
 function renderConfirmRows() {
   const wrap = $('#confirm-file-rows');
   wrap.innerHTML = pendingFiles.map((f, i) => {
@@ -240,8 +248,12 @@ function renderConfirmRows() {
     const dir = pendingOutDirs[i];
     const dirTxt = dir ? escapeHtml(dir) : '默认目录';
     const dirCls = dir ? 'file-row-dir custom' : 'file-row-dir';
+    const fmt = pendingFormats[i] || 'txt';
+    const fmtOpts = ['txt','srt','vtt'].map(v =>
+      `<option value="${v}"${v===fmt?' selected':''}>${FMT_LABELS[v]}</option>`).join('');
     return `<div class="file-row" data-idx="${i}">
       <span class="file-row-name" title="${escapeAttr(name)}">${escapeHtml(name)}</span>
+      <select class="file-fmt-sel select-tiny" data-fmt-idx="${i}">${fmtOpts}</select>
       <span class="${dirCls}" title="${escapeAttr(dir || '默认目录')}">${dirTxt}</span>
       <button class="icon-btn" data-pick-file="${i}" title="设置此文件的输出位置">📂</button>
     </div>`;
@@ -252,6 +264,14 @@ function renderConfirmRows() {
       const d = await window.api.pickDir();
       if (d) { pendingOutDirs[idx] = d; renderConfirmRows(); }
     });
+  wrap.querySelectorAll('[data-fmt-idx]').forEach(sel =>
+    sel.onchange = () => { pendingFormats[Number(sel.dataset.fmtIdx)] = sel.value; });
+}
+
+function applyUnifiedFormat(fmt) {
+  if (!fmt) return;
+  pendingFormats = pendingFormats.map(() => fmt);
+  renderConfirmRows();
 }
 
 async function pickUnifiedDir() {
@@ -270,7 +290,8 @@ function clearUnifiedDir() {
 async function confirmStart() {
   const music = $('input[name="music"][value="yes"]').checked;
   const outDirs = pendingOutDirs.map(d => d || config.outDir);
-  await window.api.addTasks({ files: pendingFiles, music, outDirs });
+  const outputFormats = pendingFormats.slice();
+  await window.api.addTasks({ files: pendingFiles, music, outDirs, outputFormats });
   closeConfirm();
   $('.nav-item[data-filter="running"]').click();   // 切到处理中视图
 }
@@ -594,6 +615,7 @@ function renderDetail() {
   $('#detail-elapsed').textContent =
     (t.status === 'running' || t.status === 'retrying') ? fmtElapsed(t.startTs)
       : (isDone ? '已完成' : '—');
+  $('#detail-fmt').textContent = FMT_LABELS[t.outputFormat] || '纯文本';
   $('#detail-music').textContent = t.music ? '是（含人声分离）' : '否';
   $('#detail-outdir').textContent = t.outDir || '—';
 
