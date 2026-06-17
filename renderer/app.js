@@ -508,6 +508,11 @@ async function refreshAllModelDropdowns() {
   if (dTag) { dTag.textContent = demucsOk ? '已下载' : '未下载，首次将下载'; dTag.className = `status-tag ${demucsOk?'ok':'miss'}`; }
   $('#btn-dl-whisper')?.classList.toggle('hidden', wOk);
   $('#btn-dl-demucs')?.classList.toggle('hidden', demucsOk);
+  // ‖ 图标：始终显示表示"当前使用中"
+  const wi = $('#whisper-active-icon');
+  if (wi) wi.style.display = 'inline-flex';
+  const di = $('#demucs-active-icon');
+  if (di) di.style.display = 'inline-flex';
 }
 
 function updatePythonStatus() {

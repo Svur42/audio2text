@@ -376,7 +376,7 @@ html, body {
 }
 .select { cursor: pointer; }
 .row-field { display: flex; gap: 20px; flex-wrap: wrap; }
-.row-field > div { flex: 1; min-width: 220px; }
+.row-field > div { flex: 1; min-width: 260px; }
 .accent-row { display: flex; align-items: center; gap: 10px; }
 .color-input { width: 48px; height: 34px; border: 1px solid var(--border); border-radius: 8px; background: none; cursor: pointer; padding: 2px; }
 
