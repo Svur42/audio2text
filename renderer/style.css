@@ -120,47 +120,45 @@ html, body {
 .refresh-flyback { animation: refreshFlyBack 0.65s cubic-bezier(0,0,0.15,1.7) forwards; }
 
 /* ── Easter egg: UFO 飞右上角 + 斜向光束 ── */
-.ufo-wrap { display: inline-flex; flex-direction: column; align-items: center; }
 
-/* 正常状态黄色光柱（随 UFO 倾斜） */
+/* 正常状态黄色光柱（在 UFO 本体内，随本体一起倾斜） */
 .ufo-beam-normal {
   position: absolute;
-  top: 80%; left: 50%; transform: translateX(-50%);
-  width: 26px; height: 50px;
+  top: 78%; left: 50%; transform: translateX(-50%);
+  width: 26px; height: 46px;
   background:
-    radial-gradient(ellipse 70% 30% at 50% 0%, rgba(255,230,70,0.8), transparent 90%),
-    linear-gradient(to bottom, rgba(255,210,40,0.5) 0%, transparent 100%);
+    radial-gradient(ellipse 70% 30% at 50% 0%, rgba(255,230,70,0.85), transparent 90%),
+    linear-gradient(to bottom, rgba(255,210,40,0.55) 0%, transparent 100%);
   clip-path: polygon(28% 0%, 72% 0%, 100% 100%, 0% 100%);
   pointer-events: none;
 }
 
-/* UFO 飞行：从倾斜状态(-44°)起始，弧线加速到右上方 */
+/* flyer 飞行：只做位移（弧线），不旋转——倾斜由本体 float 负责 */
 @keyframes ufoFlyRight {
-  0%   { transform: translate(0,0)          rotate(-44deg) scale(0.86); }
-  18%  { transform: translate(38px,-70px)   rotate(-20deg) scale(0.94); }
-  42%  { transform: translate(138px,-135px) rotate(8deg)   scale(1.02); }
-  72%  { transform: translate(228px,-154px) rotate(7deg)   scale(1.0);  }
-  88%  { transform: translate(250px,-160px) rotate(6deg)   scale(0.99); }
-  100% { transform: translate(242px,-154px) rotate(6deg)   scale(1.0);  }
+  0%   { transform: translate(0,0); }
+  20%  { transform: translate(50px,-78px); }
+  48%  { transform: translate(160px,-140px); }
+  78%  { transform: translate(248px,-158px); }
+  90%  { transform: translate(262px,-164px); }   /* 轻微冲过 */
+  100% { transform: translate(252px,-156px); }    /* 落定 */
 }
 @keyframes ufoFlyBack {
-  0%   { transform: translate(242px,-154px) rotate(6deg)   scale(1.0); }
-  22%  { transform: translate(176px,-116px) rotate(-2deg)  scale(1.02);}
-  55%  { transform: translate(66px, -44px)  rotate(-22deg) scale(1.04);}
-  80%  { transform: translate(6px,   -5px)  rotate(-40deg) scale(0.9); }
-  92%  { transform: translate(-3px,   3px)  rotate(-46deg) scale(0.87);}
-  100% { transform: translate(0,0)          rotate(-44deg) scale(0.86);}
+  0%   { transform: translate(252px,-156px); }
+  45%  { transform: translate(110px,-72px); }
+  85%  { transform: translate(-6px,4px); }         /* 小过冲 */
+  100% { transform: translate(0,0); }
 }
 
-/* 光束：绑定在 ufo-wrap 内，从 UFO 底部发出，-50° 角让 ☭ 落向屏幕中央 */
+/* 光束：flyer 的子节点（跟 UFO 一起飞），从 UFO 底部向左下打，落到屏幕中央 */
 .ufo-beam-wrap {
   position: absolute;
-  top: 86%; left: 50%;
-  transform: translateX(-50%) rotate(-50deg);
+  top: 40px; left: 50%;
+  transform: translateX(-50%) rotate(40deg);   /* 顺时针 40°：光束向左下伸 */
   transform-origin: top center;
-  width: 200px; height: 340px;
+  width: 190px; height: 360px;
   pointer-events: none;
   opacity: 0;
+  z-index: -1;   /* 在 UFO 本体后面，光从飞船下方透出 */
 }
 .ufo-beam-light {
   position: absolute; inset: 0;
@@ -285,14 +283,17 @@ html, body {
 .empty-art { font-size: 96px; opacity: 0.5; animation: float 3s ease-in-out infinite; display: none; }
 
 /* ---------- CSS 自制 UFO ---------- */
+/* 给 UFO 与下方文字留出大间距，避免重叠 */
+.ufo-wrap { position: relative; display: inline-flex; justify-content: center; margin-bottom: 70px; }
+/* flyer 承载飞行位移（彩蛋时 translate），默认无变换 */
+.ufo-flyer { position: relative; }
 .ufo-css {
   width: 90px; height: 50px;
   position: relative;
   animation: float 3s ease-in-out infinite;
-  opacity: 0.75;
+  opacity: 0.8;
   cursor: pointer;
   filter: drop-shadow(0 8px 18px rgba(0,0,0,0.45));
-  /* 正常状态倾斜约 -45° + 略微缩小 */
   transform-origin: center center;
 }
 /* 碟形主体 */
@@ -332,10 +333,10 @@ html, body {
 }
 .empty-text { font-size: 15px; color: var(--text-dim); }
 .empty-sub { font-size: 13px; }
-/* float 带上倾斜角，使正常状态呈现 ~-45° 倾斜 */
+/* float 带倾斜角：左边向上抬约 45°（顺时针 rotate 正值 = 左侧升高） */
 @keyframes float {
-  0%,100% { transform: rotate(-44deg) scale(0.86) translateY(0px); }
-  50%     { transform: rotate(-44deg) scale(0.86) translateY(-10px); }
+  0%,100% { transform: rotate(44deg) scale(0.9) translateY(0px); }
+  50%     { transform: rotate(44deg) scale(0.9) translateY(-9px); }
 }
 
 /* ---------- 任务卡片 ---------- */

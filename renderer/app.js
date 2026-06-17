@@ -256,7 +256,7 @@ function bindEvents() {
       if (!isRedAccent()) return;
       _ufoEasterActive = true;
       triggerUFOEaster();
-      setTimeout(() => { _ufoEasterActive = false; }, 7000);
+      setTimeout(() => { _ufoEasterActive = false; }, 7200);
     }
   });
 
@@ -960,53 +960,53 @@ function isRedAccent() {
 
 // UFO 彩蛋动画序列（飞到右上角 → 斜向光束打向中央 → 恢复）
 function triggerUFOEaster() {
-  const ufoArt = $('#ufo-art');
+  const flyer = $('#ufo-flyer');           // 承载飞行位移
   const beamWrap = $('#ufo-beam-wrap');
   const beamLight = beamWrap?.querySelector('.ufo-beam-light');
   const symbol = beamWrap?.querySelector('.ufo-beam-symbol');
-  if (!ufoArt || !beamWrap || !beamLight || !symbol) return;
+  if (!flyer || !beamWrap || !beamLight || !symbol) return;
 
   // 初始化光束状态
   beamWrap.style.opacity = '0';
   beamLight.style.cssText = 'clip-path: polygon(47% 0%, 53% 0%, 53% 0%, 47% 0%); animation: none;';
   symbol.style.cssText = 'opacity: 0; transform: translateX(-50%) scale(0.45); filter: blur(14px); animation: none;';
 
-  // 0ms: UFO 暂停 float，开始飞向右上角（圆弧路径）
-  ufoArt.style.animation = 'ufoFlyRight 0.95s cubic-bezier(0.2,0,0.3,1) forwards';
+  // 0ms: flyer 飞向右上角（UFO 本体 + 光束一起移动；本体倾斜浮动不受影响）
+  flyer.style.animation = 'ufoFlyRight 1.05s cubic-bezier(0.25,0,0.3,1) forwards';
 
-  // 650ms: UFO 快到位时，光束从顶端细线展开（光源就位后才有光）
+  // 750ms: UFO 到位后，光束从顶端细线向下展开
   setTimeout(() => {
     beamWrap.style.opacity = '1';
     beamLight.style.animation = 'beamExpand 0.7s cubic-bezier(0.15,0,0.5,1) forwards';
-  }, 650);
+  }, 750);
 
-  // 1300ms: 光束充满锥形后，☭ 在光照区域从焦外慢慢清晰
+  // 1400ms: 光锥充满后，☭ 在光照落点从焦外慢慢清晰
   setTimeout(() => {
     symbol.style.animation = 'symbolAppear 0.75s cubic-bezier(0.2,0,0.4,1) forwards';
-  }, 1300);
+  }, 1400);
 
-  // 4500ms: ☭ 先消失（投影断开）
+  // 4600ms: ☭ 先消失（投影断开）
   setTimeout(() => {
     symbol.style.animation = 'symbolFade 0.5s ease-in forwards';
-  }, 4500);
+  }, 4600);
 
-  // 5050ms: 光束从底部向上收回（断源）
+  // 5150ms: 光束从底部向上收回（断源物理）
   setTimeout(() => {
     beamLight.style.animation = 'beamRetract 0.65s cubic-bezier(0.35,0,0.75,1) forwards';
-  }, 5050);
+  }, 5150);
 
-  // 5450ms: 光束消失后 UFO 飞回中央
+  // 5850ms: 光束消失后 UFO 飞回中央
   setTimeout(() => {
     beamWrap.style.opacity = '0';
-    ufoArt.style.animation = 'ufoFlyBack 0.9s cubic-bezier(0.3,0,0.4,1) forwards';
-  }, 5750);
+    flyer.style.animation = 'ufoFlyBack 0.95s cubic-bezier(0.3,0,0.4,1) forwards';
+  }, 5850);
 
-  // 6800ms: 全部恢复，float 动画重启
+  // 6900ms: 全部恢复
   setTimeout(() => {
-    ufoArt.style.animation = '';
+    flyer.style.animation = '';
     beamLight.style.cssText = 'clip-path: polygon(47% 0%, 53% 0%, 53% 0%, 47% 0%); animation: none;';
     symbol.style.cssText = 'opacity: 0; animation: none;';
-  }, 6800);
+  }, 6900);
 }
 
 function hexToHsl(hex) {
