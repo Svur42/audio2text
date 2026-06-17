@@ -86,11 +86,53 @@ function bindEvents() {
   $('#btn-add').addEventListener('click', pickFiles);
 
   // 刷新列表（右上角）
+  let _refreshClicks = 0, _refreshTimer = null;
   $('#btn-refresh').addEventListener('click', () => {
     const btn = $('#btn-refresh');
+    if (btn.classList.contains('refresh-flyoff') || btn.classList.contains('refresh-flyback')) return;
+
+    _refreshClicks++;
+    clearTimeout(_refreshTimer);
+    _refreshTimer = setTimeout(() => { _refreshClicks = 0; }, 1500);
+
+    if (_refreshClicks >= 5) {
+      _refreshClicks = 0;
+      // 彩蛋：飞走再飞回
+      btn.classList.add('refresh-flyoff');
+      btn.addEventListener('animationend', function flyback(e) {
+        if (e.animationName !== 'refreshFlyOff') return;
+        btn.removeEventListener('animationend', flyback);
+        btn.classList.remove('refresh-flyoff');
+        btn.classList.add('refresh-flyback');
+        btn.addEventListener('animationend', function done(e) {
+          if (e.animationName !== 'refreshFlyBack') return;
+          btn.removeEventListener('animationend', done);
+          btn.classList.remove('refresh-flyback');
+        });
+      });
+      window.api.refreshTasks();
+      return;
+    }
     btn.classList.add('spinning');
     window.api.refreshTasks();
     setTimeout(() => btn.classList.remove('spinning'), 500);
+  });
+
+  // 彩蛋：logo 连点 5 次 → 彩虹强调色循环 8 秒后恢复
+  let _logoClicks = 0, _logoTimer = null, _logoRainbow = false;
+  $('.rail-logo').addEventListener('click', () => {
+    _logoClicks++;
+    clearTimeout(_logoTimer);
+    _logoTimer = setTimeout(() => { _logoClicks = 0; }, 2000);
+    if (_logoClicks >= 5 && !_logoRainbow) {
+      _logoClicks = 0;
+      _logoRainbow = true;
+      $('.rail-logo').classList.add('rainbow');
+      setTimeout(() => {
+        $('.rail-logo').classList.remove('rainbow');
+        _logoRainbow = false;
+      }, 8000);
+    }
   });
 
   // 清空已完成/失败记录（不删文档）
