@@ -259,10 +259,10 @@ html, body {
   border-radius: 14px; box-shadow: var(--shadow);
   animation: pop 0.2s ease;
 }
-.modal.wide { width: 560px; }
+.modal.wide { width: min(560px, 92vw); }
 @keyframes pop { from { transform: scale(0.96); opacity: 0;} to { transform: none; opacity: 1;} }
 .modal-title { font-size: 17px; font-weight: 700; padding: 20px 22px 0; }
-.modal-body { padding: 18px 22px; max-height: 60vh; overflow-y: auto; }
+.modal-body { padding: 18px 22px; max-height: 65vh; overflow-y: auto; overflow-x: hidden; }
 .modal-foot {
   display: flex; justify-content: flex-end; gap: 10px;
   padding: 14px 22px; border-top: 1px solid var(--border);
@@ -314,19 +314,17 @@ html, body {
 }
 .fmt-row { display: flex; gap: 8px; }
 
-/* 音乐 dot 小圆点（批量文件列表用） */
+/* 音乐 dot 小圆点（批量文件列表用）——纯色填充，无文字 */
 .music-dot {
-  flex-shrink: 0; width: 22px; height: 22px;
+  flex-shrink: 0; width: 14px; height: 14px;
   border-radius: 50%; border: 2px solid var(--border);
-  background: var(--bg-input); color: var(--text-faint);
-  font-size: 11px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: var(--trans); padding: 0;
+  background: var(--border);
+  cursor: pointer; transition: var(--trans); padding: 0;
 }
-.music-dot:hover { border-color: var(--accent); }
-.music-dot.active {
-  background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
-}
+.music-dot:hover { border-color: var(--accent); background: var(--accent-soft); }
+.music-dot.active { background: var(--accent); border-color: var(--accent); }
+
+.music-dot-hint { font-size: 12px; color: var(--text-faint); }
 
 /* 统一设置行 */
 .unified-row {

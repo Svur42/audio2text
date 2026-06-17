@@ -111,6 +111,14 @@ function bindEvents() {
   $('#btn-settings').addEventListener('click', openSettings);
   $('#settings-close').addEventListener('click', () => $('#settings-modal').classList.add('hidden'));
   $('#settings-save').addEventListener('click', saveSettings);
+  // 设置里的 readonly input 点击也弹文件夹选择器
+  $$('#settings-modal input.text-input[readonly]').forEach(input => {
+    input.style.cursor = 'pointer';
+    input.addEventListener('click', () => {
+      const pickBtn = input.nextElementSibling;
+      if (pickBtn) pickBtn.click();
+    });
+  });
   $$('#settings-modal [data-pick]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const dir = await window.api.pickDir();
@@ -164,11 +172,18 @@ function bindEvents() {
   $('#confirm-ok').addEventListener('click', confirmStart);
   $$('input[name="music"]').forEach(r => r.addEventListener('change', updateMusicHint));
   $('#btn-pick-unified').addEventListener('click', pickUnifiedDir);
+  $('#unified-path').addEventListener('click', pickUnifiedDir);   // 点 input 也触发
   $('#btn-clear-unified').addEventListener('click', clearUnifiedDir);
   const ufSel = $('#unified-format');
   if (ufSel) ufSel.addEventListener('change', () => applyUnifiedFormat(ufSel.value));
-  $('#btn-all-music-yes')?.addEventListener('click', () => applyUnifiedMusic(true));
-  $('#btn-all-music-no')?.addEventListener('click', () => applyUnifiedMusic(false));
+  $('#btn-all-music')?.addEventListener('click', () => {
+    const allHave = pendingMusics.every(v => v);
+    applyUnifiedMusic(!allHave);  // 全有→全无；否则→全有
+    const dot = $('#btn-all-music');
+    const hint = $('#all-music-hint');
+    if (dot) dot.classList.toggle('active', !allHave);
+    if (hint) hint.textContent = !allHave ? '全部有' : '全部无';
+  });
 
   // 任务详情
   $('#detail-close').addEventListener('click', closeDetail);
@@ -294,10 +309,12 @@ function renderSingleConfirm() {
     $('#single-music-hint').textContent = yes ? '首次需联网下载分离模型（约数百 MB）' : '';
   };
   el.querySelectorAll('input[name="single-music"]').forEach(r => r.addEventListener('change', musicHint));
-  el.querySelector('#btn-single-pick').addEventListener('click', async () => {
+  const pickDir = async () => {
     const d = await window.api.pickDir();
     if (d) el.querySelector('#single-outdir').value = d;
-  });
+  };
+  el.querySelector('#btn-single-pick').addEventListener('click', pickDir);
+  el.querySelector('#single-outdir').addEventListener('click', pickDir);
 }
 function closeConfirm() {
   $('#confirm-modal').classList.add('hidden');
@@ -328,7 +345,7 @@ function renderConfirmRows() {
     const fmtOpts = Object.entries(FMT_LABELS).map(([v,l]) =>
       `<option value="${v}"${v===fmt?' selected':''}>${l}</option>`).join('');
     return `<div class="file-row" data-idx="${i}">
-      <button class="music-dot${hasMusic?' active':''}" data-music-idx="${i}" title="${hasMusic?'有背景音乐（点击取消）':'无背景音乐（点击开启分离）'}">🎵</button>
+      <button class="music-dot${hasMusic?' active':''}" data-music-idx="${i}" title="${hasMusic?'有背景音乐，需分离（点击取消）':'无背景音乐（点击标记需分离）'}"></button>
       <span class="file-row-name" title="${escapeAttr(name)}">${escapeHtml(name)}</span>
       <select class="file-fmt-sel select-tiny" data-fmt-idx="${i}">${fmtOpts}</select>
       <span class="${dirCls}" title="${escapeAttr(dir || '默认目录')}">${dirTxt}</span>
@@ -431,11 +448,11 @@ function fillSelect(sel, options, current, downloadedSet) {
   sel.innerHTML = options.map(([v, label]) => {
     let prefix = '';
     if (downloadedSet) {
-      if (v === current) prefix = '▶ ';           // 当前使用中
-      else if (downloadedSet.has(v)) prefix = '✓ '; // 已下载
-      else prefix = '○ ';                           // 未下载
+      if (v === current) prefix = '❙❙ ';          // 当前使用中（双竖杠）
+      else if (downloadedSet.has(v)) prefix = '● '; // 已下载（实心圆）
+      else prefix = '○ ';                           // 未下载（空心圆）
     }
-    const suffix = v === current ? '（使用中）' : '';
+    const suffix = v === current ? ' ← 使用中' : '';
     return `<option value="${v}"${v === current ? ' selected' : ''}>${prefix}${label}${suffix}</option>`;
   }).join('');
 }
