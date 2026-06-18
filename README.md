@@ -121,11 +121,6 @@ npm run build    # 打包 Windows portable exe
 
 [GNU General Public License v3.0](LICENSE)
 
-### 致谢
-
-- [@Svur42](https://github.com/Svur42) — 项目发起人与主要开发者
-- [Claude](https://anthropic.com) (Anthropic) — AI 编程协作
-
 ---
 
 <a id="english"></a>
@@ -244,8 +239,3 @@ npm run build    # Build Windows portable exe
 ### License
 
 [GNU General Public License v3.0](LICENSE)
-
-### Credits
-
-- [@Svur42](https://github.com/Svur42) — Project creator & lead developer
-- [Claude](https://anthropic.com) (Anthropic) — AI programming assistant
