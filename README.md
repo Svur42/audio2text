@@ -42,37 +42,21 @@
 
 ### 1. 下载 / Download
 
-前往 [Releases](../../releases/latest) 下载：
+前往 [Releases](../../releases/latest) 下载 `Audio2Text-x.x.x.exe`（便携版，无需安装）。
 
-Go to [Releases](../../releases/latest) to download:
+Go to [Releases](../../releases/latest) to download `Audio2Text-x.x.x.exe` (portable, no install needed).
 
-- `Audio2Text-x.x.x.exe` — 主程序（便携版，无需安装）/ Main app (portable, no install)
-- `安装依赖.bat` — Python 依赖一键安装脚本 / One-click Python dependency installer
-
-### 2. 安装 Python 依赖 / Install Python Dependencies
+### 2. 安装 Python / Install Python
 
 需要先安装 Python 3.9+：https://python.org（安装时勾选"Add Python to PATH"）
 
 Requires Python 3.9+: https://python.org (check "Add Python to PATH" during install)
 
-运行下载的 `安装依赖.bat` 自动安装，或手动：
+### 3. 运行并安装依赖 / Run & Install Dependencies
 
-Run the downloaded `安装依赖.bat`, or manually:
+双击 `Audio2Text.exe` 启动，打开 **设置 → 运行环境**，应用会自动检测缺少的依赖并提供一键安装按钮（含实时进度条）。
 
-```bash
-pip install faster-whisper          # 必须 / Required
-pip install demucs                  # 可选，用于背景音乐分离 / Optional, for music separation
-```
-
-**GPU 加速（可选，需 NVIDIA 显卡）/ GPU acceleration (optional, requires NVIDIA GPU):**
-```bash
-pip install torch --index-url https://download.pytorch.org/whl/cu121
-```
-
-### 3. 运行 / Run
-
-双击 `Audio2Text.exe` 即可启动。  
-Double-click `Audio2Text.exe` to launch.
+Double-click `Audio2Text.exe` to launch. Open **Settings → Environment** — the app will detect missing dependencies and offer one-click install with real-time progress.
 
 ---
 
