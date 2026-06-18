@@ -24,8 +24,60 @@ function bundledPipelinePath() {
     : path.join(__dirname, 'backend', 'pipeline.py');
 }
 
-// 自动检测可用 Python（依次试 py -3 / python / python3）
+// 内嵌 Python 路径（extraResources/python-embed/python.exe）
+function bundledPythonPath() {
+  const embedDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'python-embed')
+    : path.join(__dirname, 'build', 'python-embed');
+  const exe = path.join(embedDir, 'python.exe');
+  return fs.existsSync(exe) ? exe : null;
+}
+
+// 内嵌 Python 的 pip 包存放目录（userData，跨版本更新不丢失）
+function embeddedSitePackages() {
+  return path.join(app.getPath('userData'), 'site-packages');
+}
+
+// 运行内嵌 Python 时附加的环境变量
+function embeddedPythonEnv() {
+  const sp = embeddedSitePackages();
+  const existing = process.env.PYTHONPATH || '';
+  return {
+    ...process.env,
+    PYTHONPATH: existing ? `${sp};${existing}` : sp,
+    PYTHONNOUSERSITE: '0',
+  };
+}
+
+// 确保内嵌 Python 有 pip（首次自举）
+async function ensureEmbeddedPip(pyPath) {
+  const pipCheck = () => {
+    try { execFileSync(pyPath, ['-m', 'pip', '--version'], { timeout: 8000 }); return true; }
+    catch (e) { return false; }
+  };
+  if (pipCheck()) return;
+
+  // 下载 get-pip.py 并运行
+  const getPipPath = path.join(app.getPath('temp'), 'get-pip.py');
+  await new Promise((resolve, reject) => {
+    const https = require('https');
+    const file = require('fs').createWriteStream(getPipPath);
+    https.get('https://bootstrap.pypa.io/get-pip.py', (res) => {
+      res.pipe(file);
+      file.on('finish', () => { file.close(); resolve(); });
+    }).on('error', reject);
+  });
+  execFileSync(pyPath, [getPipPath, '--no-warn-script-location'], { timeout: 60000, stdio: 'inherit' });
+  try { fs.unlinkSync(getPipPath); } catch (e) {}
+}
+
+// 自动检测可用 Python（优先用内嵌版本，再试系统 Python）
 function detectPython() {
+  // 1. 优先内嵌 Python
+  const bundled = bundledPythonPath();
+  if (bundled) return bundled;
+
+  // 2. 回退到系统 Python
   const tries = [
     ['py', ['-3', '-c', 'import sys;print(sys.executable)']],
     ['python', ['-c', 'import sys;print(sys.executable)']],
@@ -361,8 +413,13 @@ function buildArgs(t, cfg) {
 // 全角冒号：U+FF1A — 直接用字面量
 function startProcess(t, cfg, isRetry) {
   const args = buildArgs(t, cfg);
+  const isBundledPy = cfg.pythonPath === bundledPythonPath();
+  const runEnv = {
+    ...(isBundledPy ? embeddedPythonEnv() : process.env),
+    PYTHONIOENCODING: 'utf-8',
+  };
   const child = spawn(cfg.pythonPath, ['-u', ...args], {
-    env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+    env: runEnv,
     windowsHide: true,
   });
   t.proc = child;
@@ -648,8 +705,10 @@ ipcMain.handle('env:check', async () => {
   const result = { python: !!py, pythonPath: py, fasterWhisper: false, demucs: false, gpu: false, gpuName: null };
   if (!py) return result;
 
+  const isBundled = py === bundledPythonPath();
+  const pyEnv = isBundled ? embeddedPythonEnv() : process.env;
   const pyCheck = (code) => new Promise((resolve) => {
-    const c = spawn(py, ['-c', code], { timeout: 8000 });
+    const c = spawn(py, ['-c', code], { timeout: 8000, env: pyEnv });
     let out = '';
     c.stdout.on('data', d => { out += d; });
     c.on('close', r => resolve(r === 0 ? out.trim() : null));
@@ -688,18 +747,24 @@ ipcMain.on('env:install', (event, { pkg, variant }) => {
 
   if (!py) { send('env:install:done', { pkg, code: 1, error: S.env_install_no_python }); return; }
 
+  // 内嵌 Python 时把包装到 userData/site-packages
+  const isBundled = py === bundledPythonPath();
+  const targetArgs = isBundled ? ['--target', embeddedSitePackages()] : [];
+  const installEnv = { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8',
+    ...(isBundled ? embeddedPythonEnv() : {}) };
+
   // 构建安装步骤序列
   const steps = [];
   if (pkg === 'faster-whisper') {
-    steps.push({ label: 'faster-whisper', args: ['-m', 'pip', 'install', 'faster-whisper'] });
+    steps.push({ label: 'faster-whisper', args: ['-m', 'pip', 'install', 'faster-whisper', ...targetArgs] });
   } else if (pkg === 'torch') {
     if (variant === 'gpu') {
-      steps.push({ label: 'PyTorch（GPU/CUDA）', args: ['-m', 'pip', 'install', 'torch', '--index-url', 'https://download.pytorch.org/whl/cu121'] });
+      steps.push({ label: 'PyTorch（GPU/CUDA）', args: ['-m', 'pip', 'install', 'torch', '--index-url', 'https://download.pytorch.org/whl/cu121', ...targetArgs] });
     } else {
-      steps.push({ label: 'PyTorch（CPU）', args: ['-m', 'pip', 'install', 'torch'] });
+      steps.push({ label: 'PyTorch（CPU）', args: ['-m', 'pip', 'install', 'torch', ...targetArgs] });
     }
   } else if (pkg === 'demucs') {
-    steps.push({ label: 'demucs', args: ['-m', 'pip', 'install', 'demucs'] });
+    steps.push({ label: 'demucs', args: ['-m', 'pip', 'install', 'demucs', ...targetArgs] });
   }
 
   let stepIdx = 0;
@@ -943,6 +1008,11 @@ ipcMain.handle('task:openFolder', (_e, filePath) => {
 // ---------------------------------------------------------------------------
 app.whenReady().then(async () => {
   createWindow();
+  // 若使用内嵌 Python，自举 pip（首次异步完成，不阻塞窗口显示）
+  const bundledPy = bundledPythonPath();
+  if (bundledPy) {
+    ensureEmbeddedPip(bundledPy).catch(e => console.warn('[pip-bootstrap]', e.message));
+  }
   // 首次启动：把内置 locales（English 等）复制到 userData/locales，用户无需手动导入
   try {
     const builtinLocales = app.isPackaged

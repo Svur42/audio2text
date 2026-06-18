@@ -7,6 +7,8 @@
   "license": "GPL-3.0",
   "scripts": {
     "start": "electron .",
+    "setup-python": "node scripts/setup-python-embed.js",
+    "prebuild": "node scripts/setup-python-embed.js",
     "build": "electron-builder --win portable"
   },
   "devDependencies": {
@@ -26,7 +28,8 @@
     ],
     "extraResources": [
       { "from": "backend", "to": "backend" },
-      { "from": "locales", "to": "locales" }
+      { "from": "locales", "to": "locales" },
+      { "from": "build/python-embed", "to": "python-embed" }
     ],
     "win": {
       "target": "portable",
