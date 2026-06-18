@@ -961,52 +961,58 @@ function isRedAccent() {
 // UFO 彩蛋动画序列（飞到右上角 → 斜向光束打向中央 → 恢复）
 function triggerUFOEaster() {
   const flyer = $('#ufo-flyer');           // 承载飞行位移
+  const body = $('#ufo-art');              // UFO 本体（飞行期间冻结倾斜，避免浮动抖动）
   const beamWrap = $('#ufo-beam-wrap');
   const beamLight = beamWrap?.querySelector('.ufo-beam-light');
-  const symbol = beamWrap?.querySelector('.ufo-beam-symbol');
-  if (!flyer || !beamWrap || !beamLight || !symbol) return;
+  const emblem = $('#emblem-proj');
+  if (!flyer || !beamWrap || !beamLight || !emblem) return;
 
-  // 初始化光束状态
+  // 初始化
   beamWrap.style.opacity = '0';
-  beamLight.style.cssText = 'clip-path: polygon(47% 0%, 53% 0%, 53% 0%, 47% 0%); animation: none;';
-  symbol.style.cssText = 'opacity: 0; transform: translateX(-50%) scale(0.45); filter: blur(14px); animation: none;';
+  beamLight.style.cssText = 'clip-path: polygon(44% 0%, 56% 0%, 56% 0%, 44% 0%); animation: none;';
+  emblem.style.cssText = 'opacity: 0; animation: none;';
+  // 冻结本体浮动为静态倾斜（消除飞行时的上下抖动 → 平滑）
+  body.style.animation = 'none';
+  body.style.transform = 'rotate(20deg)';
 
-  // 0ms: flyer 飞向右上角（UFO 本体 + 光束一起移动；本体倾斜浮动不受影响）
-  flyer.style.animation = 'ufoFlyRight 1.05s cubic-bezier(0.25,0,0.3,1) forwards';
+  // 0ms: flyer 平滑飞向右上（单段 ease-out，无停顿感）
+  flyer.style.animation = 'ufoFlyRight 1.1s cubic-bezier(0.22,0.7,0.2,1) forwards';
 
-  // 750ms: UFO 到位后，光束从顶端细线向下展开
+  // 820ms: UFO 到位，光束从发光口向下展开
   setTimeout(() => {
     beamWrap.style.opacity = '1';
     beamLight.style.animation = 'beamExpand 0.7s cubic-bezier(0.15,0,0.5,1) forwards';
-  }, 750);
+  }, 820);
 
-  // 1400ms: 光锥充满后，☭ 在光照落点从焦外慢慢清晰
+  // 1480ms: 光锥充满后，党徽在中心从焦外渐清晰
   setTimeout(() => {
-    symbol.style.animation = 'symbolAppear 0.75s cubic-bezier(0.2,0,0.4,1) forwards';
-  }, 1400);
+    emblem.style.animation = 'symbolAppear 0.8s cubic-bezier(0.2,0,0.4,1) forwards';
+  }, 1480);
 
-  // 4600ms: ☭ 先消失（投影断开）
+  // 4700ms: 党徽先消失
   setTimeout(() => {
-    symbol.style.animation = 'symbolFade 0.5s ease-in forwards';
-  }, 4600);
+    emblem.style.animation = 'symbolFade 0.5s ease-in forwards';
+  }, 4700);
 
-  // 5150ms: 光束从底部向上收回（断源物理）
+  // 5250ms: 光束从底部向上收回（断源）
   setTimeout(() => {
     beamLight.style.animation = 'beamRetract 0.65s cubic-bezier(0.35,0,0.75,1) forwards';
-  }, 5150);
+  }, 5250);
 
-  // 5850ms: 光束消失后 UFO 飞回中央
+  // 5950ms: 光束消失后 UFO 飞回
   setTimeout(() => {
     beamWrap.style.opacity = '0';
-    flyer.style.animation = 'ufoFlyBack 0.95s cubic-bezier(0.3,0,0.4,1) forwards';
-  }, 5850);
+    flyer.style.animation = 'ufoFlyBack 1.0s cubic-bezier(0.3,0.6,0.3,1) forwards';
+  }, 5950);
 
-  // 6900ms: 全部恢复
+  // 7000ms: 全部恢复（本体浮动重启）
   setTimeout(() => {
     flyer.style.animation = '';
-    beamLight.style.cssText = 'clip-path: polygon(47% 0%, 53% 0%, 53% 0%, 47% 0%); animation: none;';
-    symbol.style.cssText = 'opacity: 0; animation: none;';
-  }, 6900);
+    body.style.transform = '';
+    body.style.animation = '';
+    beamLight.style.cssText = 'clip-path: polygon(44% 0%, 56% 0%, 56% 0%, 44% 0%); animation: none;';
+    emblem.style.cssText = 'opacity: 0; animation: none;';
+  }, 7000);
 }
 
 function hexToHsl(hex) {
