@@ -60,11 +60,9 @@
 
 **1. 下载**：前往 [Releases](../../releases/latest) 下载 `Audio2Text.exe`（便携版，无需安装）
 
-**2. 安装 Python**：需要 Python 3.9+：https://python.org（勾选 "Add Python to PATH"）
+**2. 运行**：双击 `Audio2Text.exe`，打开 **设置 → 运行环境**，应用自动检测并一键安装所需依赖（faster-whisper、demucs 等）。
 
-> 计划在未来版本中内嵌 Python 运行时，届时将无需此步骤。
-
-**3. 运行**：双击 `Audio2Text.exe`，打开 **设置 → 运行环境**，应用自动检测并一键安装所需的 Python 依赖（faster-whisper、demucs 等）。
+> Python 3.12 运行时已内嵌于应用，**无需单独安装 Python**。
 
 ### 项目结构
 
@@ -179,11 +177,9 @@ Models are downloaded automatically from HuggingFace on first use.
 
 **1. Download**: Get `Audio2Text.exe` from [Releases](../../releases/latest) (portable, no install needed)
 
-**2. Install Python**: Requires Python 3.9+: https://python.org (check "Add Python to PATH")
+**2. Run**: Double-click `Audio2Text.exe`. Open **Settings → Environment** — the app detects missing dependencies and installs them in one click (faster-whisper, demucs, etc.).
 
-> A future version will bundle the Python runtime, removing this step entirely.
-
-**3. Run**: Double-click `Audio2Text.exe`. Open **Settings → Environment** — the app detects missing dependencies and installs them in one click (faster-whisper, demucs, etc.).
+> Python 3.12 runtime is **bundled with the app** — no separate Python installation required.
 
 ### Project Structure
 
