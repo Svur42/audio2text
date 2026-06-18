@@ -12,6 +12,12 @@
   --danger: #f56c6c;
   --warning: #e6a23c;
 
+  /* UFO 彩蛋统一变量（改这里即可全局生效，无误差） */
+  --ufo-tilt: 10deg;                       /* UFO 倾斜角（左侧上抬），所有相关计算引用它 */
+  --uw: clamp(86px, 11vmin, 132px);        /* UFO 宽度，随窗口缩放；UFO+光束均由它推导 */
+  --beam-port: calc(var(--uw) * 0.2);      /* 发光口宽度（红/黄光束顶边同宽） */
+  --beam-angle: 52deg;                     /* 红光束相对竖直方向的倾斜（向左下） */
+
   --radius: 10px;
   --rail-w: 64px;
   --sidebar-w: 220px;
@@ -121,35 +127,38 @@ html, body {
 
 /* ── Easter egg: UFO 飞右上角 + 斜向光束 ── */
 
-/* 正常状态黄色光柱（与红光束顶部同宽，固定发光口大小） */
+/* 正常状态黄色光柱：发光口与红光束顶边同宽(--beam-port)，彩蛋时隐藏 */
 .ufo-beam-normal {
   position: absolute;
-  top: 82%; left: 50%; transform: translateX(-50%);
-  width: 30px; height: 50px;
+  top: 80%; left: 50%; transform: translateX(-50%);
+  width: var(--beam-port); height: calc(var(--uw) * 0.42);
   background:
     radial-gradient(ellipse 70% 30% at 50% 0%, rgba(255,230,70,0.85), transparent 90%),
     linear-gradient(to bottom, rgba(255,210,40,0.55) 0%, transparent 100%);
-  clip-path: polygon(30% 0%, 70% 0%, 100% 100%, 0% 100%);
+  clip-path: polygon(8% 0%, 92% 0%, 200% 100%, -100% 100%);
   pointer-events: none;
+  transition: opacity 0.25s;
 }
+/* 彩蛋激活：黄色光柱消失（同一发光口改发红光） */
+.empty.egg-active .ufo-beam-normal { opacity: 0; }
 
-/* flyer 飞行：只做位移，平滑单段 ease-out 弧线（无中途停顿感） */
+/* flyer 飞行：只做位移，单段平滑 ease-out（无停顿感） */
 @keyframes ufoFlyRight {
   0%   { transform: translate(0,0); }
-  100% { transform: translate(230px,-150px); }
+  100% { transform: translate(calc(var(--uw) * 1.55), calc(var(--uw) * -1.05)); }
 }
 @keyframes ufoFlyBack {
-  0%   { transform: translate(230px,-150px); }
+  0%   { transform: translate(calc(var(--uw) * 1.55), calc(var(--uw) * -1.05)); }
   100% { transform: translate(0,0); }
 }
 
-/* 光束：flyer 子节点，从 UFO 底部向左下打。长、斜穿过内容区中心 */
+/* 红色光束：flyer 子节点，从发光口(--beam-port 宽)向左下打出，长锥渐隐 */
 .ufo-beam-wrap {
   position: absolute;
-  top: 56px; left: 50%;
-  transform: translateX(-50%) rotate(46deg);   /* 向左下 */
+  top: 76%; left: 50%;
+  transform: translateX(-50%) rotate(var(--beam-angle));
   transform-origin: top center;
-  width: 240px; height: 460px;
+  width: calc(var(--uw) * 1.9); height: calc(var(--uw) * 3.4);
   pointer-events: none;
   opacity: 0;
   z-index: -1;
@@ -158,45 +167,60 @@ html, body {
   position: absolute; inset: 0;
   background:
     linear-gradient(to bottom,
-      rgba(220,15,15,0.7) 0%,
-      rgba(200,5,5,0.32) 55%,
-      rgba(160,0,0,0.10) 100%);
-  /* 顶边固定窄(发光口不变)，底边宽 */
+      rgba(225,18,18,0.72) 0%,
+      rgba(205,8,8,0.34) 50%,
+      rgba(170,0,0,0.10) 80%,
+      transparent 100%);
   clip-path: polygon(44% 0%, 56% 0%, 56% 0%, 44% 0%);
 }
-
-/* 光束展开：顶端窄边固定，向下展开成梯形（底边变宽变长） */
+/* 顶边固定窄(=发光口)，仅底边外扩；底端越界以便被"地面"截断 */
 @keyframes beamExpand {
   0%   { clip-path: polygon(44% 0%, 56% 0%, 56% 0%, 44% 0%); }
-  100% { clip-path: polygon(44% 0%, 56% 0%, 90% 100%, 10% 100%); }
+  100% { clip-path: polygon(44% 0%, 56% 0%, 84% 86%, 16% 86%); }
 }
 @keyframes beamRetract {
-  0%   { clip-path: polygon(44% 0%, 56% 0%, 90% 100%, 10% 100%); }
+  0%   { clip-path: polygon(44% 0%, 56% 0%, 84% 86%, 16% 86%); }
   100% { clip-path: polygon(44% 0%, 56% 0%, 56% 0%, 44% 0%); }
 }
 
-/* 党徽投影：居中于内容区（empty 充满内容区并居中），落在光束照射范围内 */
+/* 地面光池：椭圆形（光斜射地面=圆被压扁成椭圆），位于内容区中心 */
 .emblem-proj {
   position: absolute;
   left: 50%; top: 50%;
-  transform: translate(-50%,-50%) scale(0.5);
-  width: 180px; height: 180px;
-  background: #ffd400;   /* 亮黄（党旗配色），可改红 */
+  width: calc(var(--uw) * 1.5);
+  height: calc(var(--uw) * 1.5);
+  /* perspective + rotateX 让党徽"躺"在地面上，符合斜视投影的透视压缩 */
+  transform: translate(-50%,-50%) perspective(640px) rotateX(58deg) rotateZ(-6deg) scale(0.5);
+  transform-origin: center center;
+  background: #ffd400;
   -webkit-mask: url('assets/emblem-mask.png') center / contain no-repeat;
   mask: url('assets/emblem-mask.png') center / contain no-repeat;
-  filter: drop-shadow(0 0 20px rgba(255,210,0,0.85)) drop-shadow(0 0 44px rgba(255,160,0,0.4));
+  filter: drop-shadow(0 0 18px rgba(255,210,0,0.8));
   opacity: 0;
   pointer-events: none;
 }
+/* 椭圆光池（地面被照亮的范围），在党徽下层 */
+.ground-pool {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: calc(var(--uw) * 2.6);
+  height: calc(var(--uw) * 1.1);
+  transform: translate(-50%,-46%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(230,20,20,0.4) 0%, rgba(200,0,0,0.18) 55%, transparent 80%);
+  opacity: 0; pointer-events: none; z-index: -1;
+}
 @keyframes symbolAppear {
-  0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.45); filter: blur(16px) drop-shadow(0 0 20px rgba(255,210,0,0.85)); }
-  55%  { filter: blur(3px) drop-shadow(0 0 20px rgba(255,210,0,0.85)); }
-  100% { opacity: 1; transform: translate(-50%,-50%) scale(1); filter: blur(0) drop-shadow(0 0 20px rgba(255,210,0,0.85)); }
+  0%   { opacity: 0; transform: translate(-50%,-50%) perspective(640px) rotateX(58deg) rotateZ(-6deg) scale(0.4); filter: blur(16px) drop-shadow(0 0 18px rgba(255,210,0,0.8)); }
+  55%  { filter: blur(3px) drop-shadow(0 0 18px rgba(255,210,0,0.8)); }
+  100% { opacity: 1; transform: translate(-50%,-50%) perspective(640px) rotateX(58deg) rotateZ(-6deg) scale(0.9); filter: blur(0) drop-shadow(0 0 18px rgba(255,210,0,0.8)); }
 }
 @keyframes symbolFade {
-  0%   { opacity: 1; transform: translate(-50%,-50%) scale(1); filter: blur(0); }
-  100% { opacity: 0; transform: translate(-50%,-50%) scale(0.7); filter: blur(12px); }
+  0%   { opacity: 1; transform: translate(-50%,-50%) perspective(640px) rotateX(58deg) rotateZ(-6deg) scale(0.9); filter: blur(0); }
+  100% { opacity: 0; transform: translate(-50%,-50%) perspective(640px) rotateX(58deg) rotateZ(-6deg) scale(0.6); filter: blur(12px); }
 }
+@keyframes poolFade { 0% { opacity: 0; } 100% { opacity: 1; } }
 
 /* ── Easter egg: 彩虹全屏叠加 ── */
 #rainbow-overlay {
@@ -283,7 +307,7 @@ html, body {
 /* flyer 承载飞行位移（彩蛋时 translate），默认无变换 */
 .ufo-flyer { position: relative; }
 .ufo-css {
-  width: 150px; height: 84px;
+  width: var(--uw); height: calc(var(--uw) * 0.56);
   position: relative;
   animation: float 3s ease-in-out infinite;
   opacity: 0.85;
@@ -291,10 +315,10 @@ html, body {
   filter: drop-shadow(0 10px 22px rgba(0,0,0,0.45));
   transform-origin: center center;
 }
-/* 碟形主体 */
+/* 碟形主体（尺寸用 % 跟随 ufo-css，整体随窗口缩放） */
 .ufo-disc {
   position: absolute; bottom: 0; left: 0; right: 0;
-  height: 46px;
+  height: 82%;
   background: radial-gradient(ellipse 80% 60% at 45% 35%,
     #d8d8e8 0%, #a0a0b8 40%, #686880 75%, #484860 100%);
   border-radius: 50%;
@@ -305,7 +329,7 @@ html, body {
 }
 /* 舷窗观光灯 */
 .ufo-rim {
-  position: absolute; bottom: 9px; left: 20px; right: 20px; height: 8px;
+  position: absolute; bottom: 18%; left: 14%; right: 14%; height: 16%;
   border-radius: 4px;
   background: repeating-linear-gradient(
     90deg,
@@ -318,7 +342,7 @@ html, body {
 .ufo-dome {
   position: absolute; top: 0; left: 50%;
   transform: translateX(-50%);
-  width: 64px; height: 37px;
+  width: 43%; height: 66%;
   background: radial-gradient(ellipse 60% 70% at 38% 28%,
     rgba(210,240,255,0.95) 0%,
     rgba(140,190,240,0.8) 45%,
@@ -328,11 +352,13 @@ html, body {
 }
 .empty-text { font-size: 15px; color: var(--text-dim); }
 .empty-sub { font-size: 13px; }
-/* float 带轻微倾斜：左边向上抬约 20° */
+/* float 带轻微倾斜：左边向上抬 --ufo-tilt（顺时针正值=左侧升高） */
 @keyframes float {
-  0%,100% { transform: rotate(20deg) translateY(0px); }
-  50%     { transform: rotate(20deg) translateY(-9px); }
+  0%,100% { transform: rotate(var(--ufo-tilt)) translateY(0px); }
+  50%     { transform: rotate(var(--ufo-tilt)) translateY(-9px); }
 }
+/* 彩蛋飞行期间冻结为静态倾斜（消除浮动抖动） */
+.ufo-css.frozen { animation: none; transform: rotate(var(--ufo-tilt)); }
 
 /* ---------- 任务卡片 ---------- */
 .task-list { display: flex; flex-direction: column; gap: 12px; }
