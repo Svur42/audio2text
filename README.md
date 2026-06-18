@@ -1,84 +1,147 @@
 # Audio2Text
 
-本地音频/视频转文字桌面工具。基于 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 转写，可选用 [Demucs](https://github.com/adefossez/demucs) 先做人声分离。全程本地运行，**不消耗任何 API token**。
+**本地 Whisper 语音转文字桌面工具 · Local Whisper Speech-to-Text Desktop App**
 
-- 拖拽批量转写，任务队列串行执行
-- 实时进度（已处理时长 / 总时长 / 当前步骤）
-- 多种 Whisper 模型可选（large-v3-turbo / large-v3 / medium / small …）
-- 深色 / 浅色双主题，强调色可自定义
-- 每个文件可单独指定输出目录，或统一输出
+> 零 API 费用 · 隐私安全 · 支持多语言界面  
+> Zero API cost · Privacy-first · Multi-language UI
 
-> 界面布局参考开源下载工具 [Motrix](https://github.com/agalwood/Motrix)。本项目是一个通用框架，转写引擎和人声分离模型均可在设置中切换。
+<p align="center">
+  <img src="docs/screenshot-zh.png" width="48%" alt="中文界面"/>
+  &nbsp;
+  <img src="docs/screenshot-en.png" width="48%" alt="English UI"/>
+</p>
 
-## 它不是什么
+---
 
-这是一个 **GUI 外壳**，调用本机 Python 后端完成实际转写。它**不**内置 Python、PyTorch、CUDA、ffmpeg 或模型权重（这些动辄数 GB，无法打进单文件）。你需要按下面步骤准备运行环境。
+## 功能特点 / Features
 
-## 环境要求
+| 功能 | Feature |
+|------|---------|
+| 🎙 本地运行 faster-whisper，完全离线 | Run faster-whisper locally, fully offline |
+| 🎵 支持背景音乐人声分离（demucs） | Background music/vocal separation (demucs) |
+| 📂 拖拽文件或批量添加 | Drag & drop or batch add audio files |
+| ⚡ 支持 GPU 加速（NVIDIA CUDA） | GPU acceleration (NVIDIA CUDA) |
+| 🌐 内置中文/英文，支持自定义翻译包 | Built-in Chinese/English, extensible i18n |
+| 📊 实时进度与预计耗时 | Real-time progress + ETA |
+| 🎨 深色/浅色主题，自定义强调色 | Dark/light theme, custom accent color |
+| 📋 多格式输出：md / txt / srt / vtt | Multiple output formats |
 
-1. **Python 3.9+**
-2. Python 依赖：
-   ```bash
-   pip install faster-whisper demucs
-   ```
-   - GPU 加速需安装 **CUDA 版 PyTorch**（见 https://pytorch.org ）；无 CUDA 时自动回退到 CPU（慢很多）。
-3. **ffmpeg**：安装后加入系统 `PATH`（或在应用「设置」里指定其 `bin` 目录）。
-4. 模型权重**首次转写时自动下载**（Whisper 从 HuggingFace，Demucs 从 torch hub），无需手动准备。
+---
 
-## 使用（普通用户）
+## 截图 / Screenshots
 
-1. 到 [Releases](./releases) 下载 `Audio2Text x.y.z.exe`，双击运行（便携版，免安装；首次启动会自解压，稍慢）。
-2. 首次打开进入「设置」：
-   - 确认 **Python 解释器** 已自动检测到（否则手动指定装了上述依赖的 `python.exe`）。
-   - 选择 **Whisper 模型**（默认 `large-v3-turbo`）。
-   - 设置 **默认输出目录**。
-3. 把音频/视频拖进窗口 → 确认弹窗里选「有无背景音乐」「输出位置」→ 开始。
+<p align="center">
+  <img src="docs/screenshot-settings-zh.png" width="48%" alt="设置界面（中文）"/>
+  &nbsp;
+  <img src="docs/screenshot-settings-en.png" width="48%" alt="Settings (English)"/>
+</p>
 
-> 便携 exe 无代码签名，Windows Defender 可能误报，按需加白名单。
+---
 
-## 开发 / 自行构建
+## 快速开始 / Quick Start
+
+### 1. 下载 / Download
+
+前往 [Releases](../../releases/latest) 下载：
+
+Go to [Releases](../../releases/latest) to download:
+
+- `Audio2Text-x.x.x.exe` — 主程序（便携版，无需安装）/ Main app (portable, no install)
+- `安装依赖.bat` — Python 依赖一键安装脚本 / One-click Python dependency installer
+
+### 2. 安装 Python 依赖 / Install Python Dependencies
+
+需要先安装 Python 3.9+：https://python.org（安装时勾选"Add Python to PATH"）
+
+Requires Python 3.9+: https://python.org (check "Add Python to PATH" during install)
+
+运行下载的 `安装依赖.bat` 自动安装，或手动：
+
+Run the downloaded `安装依赖.bat`, or manually:
 
 ```bash
-git clone <repo>
+pip install faster-whisper          # 必须 / Required
+pip install demucs                  # 可选，用于背景音乐分离 / Optional, for music separation
+```
+
+**GPU 加速（可选，需 NVIDIA 显卡）/ GPU acceleration (optional, requires NVIDIA GPU):**
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+
+### 3. 运行 / Run
+
+双击 `Audio2Text.exe` 即可启动。  
+Double-click `Audio2Text.exe` to launch.
+
+---
+
+## 技术栈 / Tech Stack
+
+| 组件 | 说明 | License |
+|------|------|---------|
+| [Electron](https://electronjs.org) | 桌面应用框架 / Desktop app framework | MIT |
+| [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | 基于 CTranslate2 的高效 Whisper 实现 | MIT |
+| [demucs](https://github.com/facebookresearch/demucs) | 音乐/人声分离 / Music/vocal separation | MIT |
+| [OpenAI Whisper](https://github.com/openai/whisper) | 原始语音识别模型权重 / Original ASR model weights | MIT |
+| Python | 后端推理运行时 / Backend inference runtime | PSF |
+
+UI 视觉语言参考了 [Motrix](https://github.com/agalwood/Motrix) 的构成主义风格（深色、硬边、等宽字体）。  
+UI visual language inspired by [Motrix](https://github.com/agalwood/Motrix)'s constructivist aesthetic.
+
+---
+
+## 国际化 / Internationalization
+
+内置语言：**中文**（默认）、**English**，无需额外下载，打开即可切换。
+
+Built-in languages: **Chinese** (default) and **English**, available immediately without any download.
+
+### 贡献翻译 / Contribute a Translation
+
+1. 打开设置 → 界面语言 → 点击 **"导出双语翻译模板"**  
+   Open Settings → Interface language → Click **"Export bilingual template"**
+
+2. 用任意文本编辑器打开 `translation-template.json`：  
+   Open `translation-template.json` in any text editor:
+
+```json
+{
+  "_instructions_en": "Replace each English value with your translation. Keys starting with _ are ignored.",
+  "_instructions_zh": "将每行英文值替换为您的翻译，_ 开头的键会被忽略。",
+  "LANG_NAME": "Your Language Name",
+  "btn_add_title": "Add files",
+  "empty_text":    "No tasks yet",
+  ...
+}
+```
+
+3. 将所有英文值替换为目标语言，修改 `LANG_NAME` 为语言名称  
+   Replace all English values with your translation, set `LANG_NAME` to the language name
+
+4. 保存文件，拖入设置的翻译文件框（或点击框选择文件），然后保存设置  
+   Save, drag the file into the Settings translation drop zone (or click to browse), then save
+
+**欢迎通过 PR 提交翻译文件到 `locales/` 目录！**  
+**Translations via PR to the `locales/` directory are welcome!**
+
+---
+
+## 开发 / Development
+
+```bash
+git clone https://github.com/Svur42/audio2text.git
 cd audio2text
 npm install
-npm start          # 开发模式运行
-npm run build      # 构建便携 exe 到 dist/
+npm start        # 开发模式 / Dev mode
+npm run build    # 打包 Windows exe / Build Windows portable exe
 ```
 
-国内网络建议用镜像安装：
-```bash
-ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
-ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ \
-npm install --registry=https://registry.npmmirror.com
-```
+---
 
-## 结构
+## 许可证 / License
 
-```
-main.js              Electron 主进程：任务队列、spawn Python、进度解析、IPC
-preload.js           contextBridge 安全桥
-renderer/            前端界面（vanilla JS + CSS）
-backend/pipeline.py  Python 转写后端（随应用打包）
-build/icon.ico       应用图标
-```
+[GNU General Public License v3.0](LICENSE)
 
-## 支持的引擎
-
-| 用途 | 支持的实现 |
-|---|---|
-| 语音转写 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper)（模型：large-v3-turbo / large-v3 / large-v2 / medium / small / base / tiny / distil-large-v3） |
-| 人声分离 | [Demucs](https://github.com/adefossez/demucs)（模型：htdemucs / htdemucs_ft / mdx_extra） |
-
-> 本项目为框架，不绑定特定模型。如需添加其他引擎，修改 `backend/pipeline.py` 即可。
-
-## 致谢
-
-- 界面布局参考 [Motrix](https://github.com/agalwood/Motrix)（MIT License）
-- 转写引擎 [faster-whisper](https://github.com/SYSTRAN/faster-whisper)
-- 人声分离 [Demucs](https://github.com/adefossez/demucs)
-- 底层模型 [OpenAI Whisper](https://github.com/openai/whisper)
-
-## License
-
-[MIT](./LICENSE)
+本项目基于 GPL-3.0 协议开源。衍生作品须以相同协议开源发布。  
+This project is licensed under GPL-3.0. Derivative works must be released under the same license.

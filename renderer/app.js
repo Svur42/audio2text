@@ -1,6 +1,88 @@
 'use strict';
 
 // ---------------------------------------------------------------------------
+// i18n：data-i18n / data-i18n-title / data-i18n-ph 属性驱动 DOM 文字替换
+// 外部语言包（JSON）通过 loadExternalLang() 合并到 S，再重新 applyI18n()
+// ---------------------------------------------------------------------------
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const v = S[el.dataset.i18n];
+    if (typeof v !== 'string') return;
+    if (el.childElementCount === 0) {
+      // 纯文本节点：直接替换
+      el.textContent = v;
+    } else {
+      // 含子元素（如 label 内有 button/span）：只替换第一个文本节点，不删子元素
+      let replaced = false;
+      for (const node of el.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+          node.textContent = v + ' ';
+          replaced = true;
+          break;
+        }
+      }
+      // 没有现成文本节点则在最前面插一个
+      if (!replaced) el.insertBefore(document.createTextNode(v + ' '), el.firstChild);
+    }
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const v = S[el.dataset.i18nTitle];
+    if (typeof v === 'string') el.title = v;
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    const v = S[el.dataset.i18nPh];
+    if (typeof v === 'string') el.placeholder = v;
+  });
+}
+document.addEventListener('DOMContentLoaded', applyI18n);
+
+async function loadExternalLang(filePath) {
+  // 先把上次覆盖的 key 全部还原为原始中文值（而非 delete，delete 会留空白）
+  const originals = window.__langOriginals || {};
+  Object.keys(originals).forEach(k => { S[k] = originals[k]; });
+  window.__langOriginals = {};
+  window.__langOverrides = {};
+
+  const refresh = () => {
+    applyI18n();
+    refreshAllModelDropdowns();
+    const activeNav = document.querySelector('.nav-item.active .nav-label');
+    if (activeNav) $('#view-title').textContent = activeNav.textContent;
+  };
+
+  if (!filePath) { refresh(); return; }  // 切回中文：还原后直接刷新
+
+  const data = await window.api.loadLang(filePath);
+  if (!data) return;
+
+  Object.entries(data).forEach(([k, v]) => {
+    if (k === 'LANG_NAME') return;
+    if (typeof S[k] === 'function') return;
+    // 覆盖前先存原始值，以便将来还原
+    if (window.__langOriginals[k] === undefined) window.__langOriginals[k] = S[k];
+    window.__langOverrides[k] = v;
+    S[k] = v;
+  });
+  refresh();
+}
+
+async function refreshLangDropdown() {
+  const sel = $('#set-lang');
+  if (!sel) return;
+  const langs = await window.api.listLangs().catch(() => []);
+  sel.innerHTML = `<option value="" data-i18n="lang_default">${S.lang_default || '中文（默认）'}</option>`;
+  langs.forEach(({ name, path }) => {
+    const opt = document.createElement('option');
+    opt.value = path;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  // 恢复上次选择
+  const saved = config.lang || '';
+  if (saved && langs.some(l => l.path === saved)) sel.value = saved;
+}
+
+// ---------------------------------------------------------------------------
 // 状态
 // ---------------------------------------------------------------------------
 let config = null;
@@ -40,6 +122,7 @@ function applyTheme(cfg) {
 async function init() {
   config = await window.api.getConfig();
   applyTheme(config);
+  if (config.lang) loadExternalLang(config.lang);  // 自动恢复上次选择的语言
   bindEvents();
   window.api.onTasksUpdate((list) => { tasks = list; render(); });
   window.api.onWarnings((msgs) => showWarnings(msgs));
@@ -52,12 +135,12 @@ async function init() {
   window.api.onDownloadDone(({ type, code, error }) => {
     const btn = type === 'whisper' ? $('#btn-dl-whisper') : $('#btn-dl-demucs');
     if (code === 0) {
-      if (btn) { btn.textContent = '✓ 已下载'; btn.disabled = false; }
+      if (btn) { btn.textContent = S.downloaded; btn.disabled = false; }
       if (type === 'whisper') refreshWhisperModelStatus();
       else refreshDemucsModelStatus();
     } else {
-      if (btn) { btn.textContent = '⬇ 下载'; btn.disabled = false; }
-      showWarnings([`模型下载失败${error ? '：' + error : '（查看控制台日志）'}`]);
+      if (btn) { btn.textContent = S.btn_dl; btn.disabled = false; }
+      showWarnings([S.download_fail(error)]);
     }
   });
 
@@ -168,6 +251,46 @@ function bindEvents() {
   // 设置
   $('#btn-settings').addEventListener('click', openSettings);
   $('#settings-close').addEventListener('click', () => $('#settings-modal').classList.add('hidden'));
+  document.addEventListener('click', (e) => {
+    if (e.target.id === 'btn-env-refresh') { refreshEnvStatus(); }
+    if (e.target.id === 'btn-export-template') window.api.exportLangTemplate();
+  });
+
+  // 语言文件区：拖入 + 点击选文件（只在 lang-drop-zone 范围内响应，不触发全局遮罩）
+  const dropZone = document.getElementById('lang-drop-zone');
+  if (dropZone) {
+    const importLangFile = async (srcPath) => {
+      if (!srcPath || !srcPath.endsWith('.json')) return;
+      const result = await window.api.importLang(srcPath);
+      if (result) {
+        dropZone.textContent = (S.lang_imported || '✓ 已导入：{name}').replace('{name}', result.name);
+        dropZone.classList.add('ok');
+        await refreshLangDropdown();
+        const sel = document.getElementById('set-lang');
+        if (sel) sel.value = result.path;
+      } else {
+        dropZone.textContent = S.lang_import_fail || '导入失败';
+        setTimeout(() => { dropZone.textContent = S.lang_drop_hint || '拖入 .json'; dropZone.classList.remove('ok'); }, 3000);
+      }
+    };
+
+    dropZone.addEventListener('dragenter', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('over'); });
+    dropZone.addEventListener('dragover',  (e) => { e.preventDefault(); e.stopPropagation(); });
+    dropZone.addEventListener('dragleave', (e) => { e.stopPropagation(); dropZone.classList.remove('over'); });
+    dropZone.addEventListener('drop', async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      dropZone.classList.remove('over');
+      const file = e.dataTransfer.files[0];
+      if (file) importLangFile(window.api.getFilePath(file));
+    });
+
+    // 点击弹出文件选择器（只显示 JSON）
+    dropZone.style.cursor = 'pointer';
+    dropZone.addEventListener('click', async () => {
+      const filePath = await window.api.pickLangFile();
+      if (filePath) importLangFile(filePath);
+    });
+  }
   $('#settings-save').addEventListener('click', saveSettings);
   // 设置里的 readonly input 点击也弹文件夹选择器
   $$('#settings-modal input.text-input[readonly]').forEach(input => {
@@ -194,7 +317,7 @@ function bindEvents() {
   // 模型下载按钮
   $('#btn-dl-whisper').addEventListener('click', () => {
     const btn = $('#btn-dl-whisper');
-    btn.textContent = '下载中…'; btn.disabled = true;
+    btn.textContent = S.downloading; btn.disabled = true;
     window.api.downloadModel({
       type: 'whisper',
       modelName: $('#set-whisper-model').value,
@@ -205,7 +328,7 @@ function bindEvents() {
   });
   $('#btn-dl-demucs').addEventListener('click', () => {
     const btn = $('#btn-dl-demucs');
-    btn.textContent = '下载中…'; btn.disabled = true;
+    btn.textContent = S.downloading; btn.disabled = true;
     window.api.downloadModel({
       type: 'demucs',
       demucsModel: $('#set-demucs-model').value,
@@ -238,8 +361,153 @@ function bindEvents() {
     const dot = $('#btn-all-music');
     const hint = $('#all-music-hint');
     if (dot) dot.classList.toggle('active', !allHave);
-    if (hint) hint.textContent = !allHave ? '全部有' : '全部无';
+    if (hint) hint.textContent = !allHave ? S.confirm_music_all_on : S.confirm_music_all_off;
   });
+
+  // ── 光束引擎：真实投影几何，每帧重算梯形 ──
+  // 顶边 = 飞船发光口（绑定飞船，随浮动/飞行移动）；光束中心方向 = 飞船倾角(--ufo-tilt)，二者锁死。
+  // 两种模式：
+  //   normal —— 常驻：倾角=BASE_TILT，固定扩散半角，照到"当前没有任务"上方的虚拟地面。
+  //   aim    —— 彩蛋：拿党徽实际像素包围盒(四角)，反解 → 飞船倾角自动指向党徽中心(仍锁死)，
+  //             左右边缘光线从发光口端点恰好擦过党徽横向最外角，地面线=党徽底边
+  //             ⇒ 梯形精确外接党徽全部像素，刚好覆盖、不漏不多（确定性算法，无需手调参数）。
+  (function initBeam() {
+    const empty  = $('#empty-state');
+    const ufo    = $('#ufo-art');
+    const svg    = $('#ufo-beam-svg');
+    const poly   = $('#beam-poly');
+    const gradN  = document.getElementById('beam-grad-normal');
+    const groundRef = document.querySelector('.empty-text');
+    const emblem = $('#emblem-proj');
+    if (!empty || !ufo || !svg || !poly || !gradN || !groundRef || !emblem) return;
+
+    const root = document.documentElement;
+    const BASE_TILT = parseFloat(getComputedStyle(root).getPropertyValue('--ufo-tilt')) || 10;
+    const PORT_HALF = 0.16;   // 发光口半宽 = uw*0.16（固定）
+    const SPREAD = 13;         // 常驻扩散半角(度)：飞船固有属性，恒定不变
+
+    let mode = 'normal';
+    let tiltCur = BASE_TILT, tiltTgt = BASE_TILT;
+    let blendAim = 0, blendAimTgt = 0;   // 0=normal  1=aim，缓动插值，beam 顶点平滑过渡
+    window.__beam = {
+      aim()             { mode = 'aim';    blendAimTgt = 1; },
+      normal()          { mode = 'normal'; blendAimTgt = 0; tiltTgt = BASE_TILT; },
+      _setTiltTarget(d) { tiltTgt = Math.max(-55, Math.min(55, d)); },
+    };
+
+    const rot = (v, a) => {
+      const c = Math.cos(a), s = Math.sin(a);
+      return { x: v.x * c - v.y * s, y: v.x * s + v.y * c };
+    };
+    const hitGround = (S, dir, G) => {
+      if (dir.y <= 1e-3) return null;
+      const t = (G - S.y) / dir.y;
+      if (t < 0) return null;
+      return { x: S.x + t * dir.x, y: G };
+    };
+    const setGrad = (g, x1, y1, x2, y2) => {
+      g.setAttribute('x1', x1.toFixed(1)); g.setAttribute('y1', y1.toFixed(1));
+      g.setAttribute('x2', x2.toFixed(1)); g.setAttribute('y2', y2.toFixed(1));
+    };
+
+    function frame() {
+      const eR = empty.getBoundingClientRect();
+      const uR = ufo.getBoundingClientRect();
+      const ow = ufo.offsetWidth || 100;    // 飞船布局尺寸（不受 transform 旋转影响）
+      const oh = ufo.offsetHeight || 54;
+      const cx = (uR.left + uR.right) / 2 - eR.left;   // 飞船几何中心（=旋转中心）
+      const cy = (uR.top + uR.bottom) / 2 - eR.top;
+
+      // 党徽包围盒（blendAim > 0 时用）
+      let corners = null, emBottom = 0;
+      if (blendAimTgt > 0 || blendAim > 0.01) {
+        const cR = emblem.getBoundingClientRect();
+        const ex0 = cR.left - eR.left, ex1 = cR.right - eR.left;
+        const ey0 = cR.top - eR.top,  ey1 = cR.bottom - eR.top;
+        corners = [{x:ex0,y:ey0},{x:ex1,y:ey0},{x:ex0,y:ey1},{x:ex1,y:ey1}];
+        emBottom = ey1;
+        // 倾角目标：aim 时指向党徽中心（clamp 防光束向上消失）
+        if (mode === 'aim') {
+          const tcx = (ex0 + ex1) / 2, tcy = (ey0 + ey1) / 2;
+          const ux = tcx - cx, uy = tcy - cy, L = Math.hypot(ux, uy) || 1;
+          tiltTgt = Math.max(-55, Math.min(55,
+            Math.atan2(-ux / L, uy / L) * 180 / Math.PI));
+        }
+      }
+
+      // blendAim 缓动（k=0.055 ≈ 650ms 到位）→ beam 顶点从 normal 插值到 aim，不跳变
+      blendAim += (blendAimTgt - blendAim) * 0.055;
+
+      // 倾斜缓动
+      tiltCur += (tiltTgt - tiltCur) * 0.12;
+      root.style.setProperty('--ufo-tilt', tiltCur.toFixed(2) + 'deg');
+
+      const tRad = tiltCur * Math.PI / 180;
+      const d = rot({ x: 0, y: 1 }, tRad);   // 光束中心方向 = 飞船 local-down
+      const portDir = { x: d.y, y: -d.x };   // 发光口线段方向（垂直 d，指右）
+
+      const portDist = oh * 0.42;
+      const px = cx + d.x * portDist;        // 发光口中心：沿飞船中轴下移
+      const py = cy + d.y * portDist;
+      const hw = ow * PORT_HALF;
+      const Ltop = { x: px - hw * portDir.x, y: py - hw * portDir.y };
+      const Rtop = { x: px + hw * portDir.x, y: py + hw * portDir.y };
+
+      // 始终计算 normal 顶点
+      const gR = groundRef.getBoundingClientRect();
+      const G_n = gR.top - eR.top - 6;
+      const sRad = SPREAD * Math.PI / 180;
+      const Lbot_n = hitGround(Ltop, rot(d,  sRad), G_n);
+      const Rbot_n = hitGround(Rtop, rot(d, -sRad), G_n);
+
+      let Lbot, Rbot, G, midBotX;
+      const b = blendAim;
+      if (b < 0.01 || !corners) {
+        // 纯 normal
+        Lbot = Lbot_n; Rbot = Rbot_n; G = G_n;
+      } else {
+        // 计算 aim 顶点
+        const G_a = Math.max(emBottom, py + 8);
+        const edge = (origin, rightmost) => {
+          let best = null, key = null;
+          for (const c of corners) {
+            const vx = c.x - origin.x, vy = c.y - origin.y;
+            const fwd = vx * d.x + vy * d.y;
+            if (fwd <= 1e-3) continue;
+            const ang = (vx * portDir.x + vy * portDir.y) / fwd;
+            if (key === null || (rightmost ? ang > key : ang < key)) { key = ang; best = {x:vx, y:vy}; }
+          }
+          if (!best) best = { x: d.x, y: d.y };
+          const m = Math.hypot(best.x, best.y) || 1;
+          return { x: best.x / m, y: best.y / m };
+        };
+        const Lbot_a = hitGround(Ltop, edge(Ltop, false), G_a);
+        const Rbot_a = hitGround(Rtop, edge(Rtop, true),  G_a);
+        if (!Lbot_a || !Rbot_a) {
+          Lbot = Lbot_n; Rbot = Rbot_n; G = G_n;
+        } else {
+          // 插值：beam 顶点从 normal 平滑过渡到 aim（视觉上光束"扫过去"）
+          const lp = (a, z, t) => a + (z - a) * t;
+          Lbot = { x: lp(Lbot_n.x, Lbot_a.x, b), y: lp(Lbot_n.y, Lbot_a.y, b) };
+          Rbot = { x: lp(Rbot_n.x, Rbot_a.x, b), y: lp(Rbot_n.y, Rbot_a.y, b) };
+          G = lp(G_n, G_a, b);
+        }
+      }
+      if (!Lbot_n || !Rbot_n) { Lbot = Lbot || Lbot_n; Rbot = Rbot || Rbot_n; }
+
+      if (G <= py + 4 || !Lbot || !Rbot) { poly.setAttribute('points', ''); requestAnimationFrame(frame); return; }
+
+      poly.setAttribute('points',
+        `${Ltop.x.toFixed(1)},${Ltop.y.toFixed(1)} ${Rtop.x.toFixed(1)},${Rtop.y.toFixed(1)} ` +
+        `${Rbot.x.toFixed(1)},${Rbot.y.toFixed(1)} ${Lbot.x.toFixed(1)},${Lbot.y.toFixed(1)}`);
+
+      midBotX = (Lbot.x + Rbot.x) / 2;
+      setGrad(gradN, px, py, midBotX, G);   // 渐变沿光束方向：发光口中心 → 地面交点中线
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  })();
 
   // 彩蛋：UFO 右键 3 次（1 秒内）+ 红色主题 → 共产主义光束
   let _ufoRightClicks = 0, _ufoRightTimer = null, _ufoEasterActive = false;
@@ -276,8 +544,20 @@ function bindEvents() {
 function setupDragDrop() {
   const overlay = $('#drop-overlay');
   let depth = 0;
+
+  // 判断拖入的是否全是 JSON（翻译文件），是则不触发全局音频遮罩
+  const isJsonOnly = (dt) => {
+    const files = [...(dt.files || [])];
+    if (!files.length) {
+      const types = [...(dt.items || [])];
+      return types.length > 0 && types.every(i => i.type === 'application/json' || (i.kind === 'file' && i.type === ''));
+    }
+    return files.every(f => f.name.endsWith('.json'));
+  };
+
   window.addEventListener('dragenter', (e) => {
     e.preventDefault();
+    if (isJsonOnly(e.dataTransfer)) return;  // JSON → 不弹音频遮罩
     depth++;
     overlay.classList.add('show');
   });
@@ -387,7 +667,7 @@ function renderSingleConfirm() {
   // 绑定
   const musicHint = () => {
     const yes = el.querySelector('input[name="single-music"][value="yes"]').checked;
-    $('#single-music-hint').textContent = yes ? '首次需联网下载分离模型（约数百 MB）' : '';
+    $('#single-music-hint').textContent = yes ? S.music_hint_yes : '';
   };
   el.querySelectorAll('input[name="single-music"]').forEach(r => r.addEventListener('change', musicHint));
   const pickDir = async () => {
@@ -408,11 +688,11 @@ function updateMusicHint() {
   const yes = $('input[name="music"][value="yes"]')?.checked;
   const hint = $('#music-hint');
   if (hint) hint.textContent = yes
-    ? '首次使用需联网下载人声分离模型（约数百 MB），过程中无进度显示，请耐心等待。'
+    ? S.music_note_yes
     : '';
 }
 
-const FMT_LABELS = { md: 'Markdown (.md)', txt: '纯文本 (.txt)', srt: 'SRT 字幕', vtt: 'VTT 字幕' };
+const FMT_LABELS = () => ({ md: S.fmt_md, txt: S.fmt_txt, srt: S.fmt_srt, vtt: S.fmt_vtt });
 
 function renderConfirmRows() {
   const wrap = $('#confirm-file-rows');
@@ -511,23 +791,24 @@ async function confirmStart() {
 // ---------------------------------------------------------------------------
 // 设置
 // ---------------------------------------------------------------------------
-const WHISPER_MODELS = [
-  ['large-v3-turbo', 'large-v3-turbo（推荐 · 快且质量高）'],
-  ['large-v3',       'large-v3（最高质量 · 慢 · 显存高）'],
-  ['large-v2',       'large-v2（老牌稳定）'],
-  ['distil-large-v3','distil-large-v3（蒸馏 · 接近 large 质量 · 更快）'],
-  ['medium',         'medium（中等质量 · CPU 可用）'],
-  ['small',          'small（轻量 · CPU 友好）'],
-  ['base',           'base（极轻 · CPU 友好）'],
-  ['tiny',           'tiny（最轻最快 · 精度低 · CPU 首选）'],
+// 函数形式：每次调用时读当前 S 值，语言切换后立即生效
+const WHISPER_MODELS = () => [
+  ['large-v3-turbo', S.whisper_model_turbo],
+  ['large-v3',       S.whisper_model_v3],
+  ['large-v2',       S.whisper_model_v2],
+  ['distil-large-v3',S.whisper_model_distil],
+  ['medium',         S.whisper_model_medium],
+  ['small',          S.whisper_model_small],
+  ['base',           S.whisper_model_base],
+  ['tiny',           S.whisper_model_tiny],
 ];
-const DEMUCS_MODELS = [
-  ['htdemucs',      'htdemucs（默认 · 推荐）'],
-  ['htdemucs_ft',   'htdemucs_ft（更好 · 慢约 4 倍）'],
-  ['htdemucs_6s',   'htdemucs_6s（分离 6 个声部 · 慢）'],
-  ['mdx_extra',     'mdx_extra（MDX 架构 · 备选）'],
-  ['mdx_extra_q',   'mdx_extra_q（量化版 · CPU 友好）'],
-  ['mdx_q',         'mdx_q（量化版 · CPU 友好）'],
+const DEMUCS_MODELS = () => [
+  ['htdemucs',      S.demucs_model_ht],
+  ['htdemucs_ft',   S.demucs_model_ht_ft],
+  ['htdemucs_6s',   S.demucs_model_ht_6s],
+  ['mdx_extra',     S.demucs_model_mdx],
+  ['mdx_extra_q',   S.demucs_model_mdx_q],
+  ['mdx_q',         S.demucs_model_mdx_q2],
 ];
 
 function fillSelect(sel, options, current, downloadedSet) {
@@ -544,8 +825,8 @@ function fillSelect(sel, options, current, downloadedSet) {
 
 function openSettings() {
   // 先快速填充无状态版（秒开），再异步更新 ▶ ✓ ○ 前缀
-  fillSelect($('#set-whisper-model'), WHISPER_MODELS, config.whisperModel || 'large-v3-turbo');
-  fillSelect($('#set-demucs-model'), DEMUCS_MODELS, config.demucsModel || 'htdemucs');
+  fillSelect($('#set-whisper-model'), WHISPER_MODELS(), config.whisperModel || 'large-v3-turbo');
+  fillSelect($('#set-demucs-model'), DEMUCS_MODELS(), config.demucsModel || 'htdemucs');
   $('#set-outdir').value = config.outDir || '';
   $('#set-whisper').value = config.whisperDir || '';
   $('#set-demucs').value = config.demucsCacheDir || '';
@@ -559,6 +840,160 @@ function openSettings() {
   refreshModelStatus();
   $('#settings-modal').classList.remove('hidden');
   refreshAllModelDropdowns();  // 异步，不阻塞弹窗显示
+  // 环境检测：只在未完成时自动跑；已完成则仅显示缓存状态，不重复检测
+  if (!config.envComplete) refreshEnvStatus();
+  else renderEnvComplete();
+  refreshLangDropdown();       // 语言包扫描，异步
+}
+
+// ── 环境检测与依赖安装 ────────────────────────────────────────────────────────
+let _envInstalling = false;
+
+function renderEnvComplete() {
+  const rows = $('#env-rows');
+  if (!rows) return;
+  rows.innerHTML = `<div class="env-row"><span class="env-status-ok">✓ ${S.env_complete_label || '环境已就绪'}</span><span class="env-note" style="margin-left:8px">${S.env_complete_hint || '点"↺ 重新检测"可手动刷新'}</span></div>`;
+}
+
+async function refreshEnvStatus() {
+  const rows = $('#env-rows');
+  if (!rows) return;
+  rows.innerHTML = `<div class="env-row"><span class="env-status-checking">${S.env_detecting}</span></div>`;
+
+  let env;
+  try { env = await window.api.checkEnv(); }
+  catch (e) { rows.innerHTML = `<div class="env-row"><span class="env-status-miss">${S.env_detect_fail}</span></div>`; return; }
+
+  // ── 五行：Python / faster-whisper / PyTorch / demucs / NVIDIA 显卡 ──
+  // PyTorch 行负责 CPU/GPU 变体选择；其余行无变体概念
+  rows.innerHTML = '';
+
+  const makeRow = (icon, name, note, statusHtml, actionsHtml = '') => {
+    const div = document.createElement('div');
+    div.className = 'env-row';
+    div.innerHTML = `<span class="env-icon">${icon}</span>
+      <span class="env-name">${name}</span>
+      <span class="env-note">${note}</span>
+      ${statusHtml}
+      <div class="env-actions">${actionsHtml}</div>`;
+    rows.appendChild(div);
+  };
+
+  makeRow('🐍', S.env_python_name,
+    env.python ? env.pythonPath || '' : S.env_python_note_miss,
+    env.python ? `<span class="env-status-ok">${S.env_ok}</span>` : `<span class="env-status-miss">${S.env_not_found}</span>`);
+
+  makeRow('🎙', S.env_fw_name, S.env_fw_note,
+    env.fasterWhisper ? `<span class="env-status-ok">${S.env_ok}</span>` : `<span class="env-status-miss">${S.env_miss}</span>`,
+    env.fasterWhisper ? '' : `<button class="btn ghost tiny" data-install="faster-whisper" data-variant="cpu">${S.btn_install}</button>`);
+
+  {
+    let statusHtml, actionsHtml = '';
+    if (env.torchInstalled) {
+      statusHtml = env.torchCuda
+        ? `<span class="env-status-ok">${S.env_torch_cuda}</span>`
+        : `<span class="env-status-ok" style="color:var(--warning)">${S.env_torch_cpu}</span>`;
+      if (!env.torchCuda && env.gpu) {
+        actionsHtml = `<span class="env-note" style="color:var(--warning)">${S.env_torch_upgrade}</span>
+          <button class="btn ghost tiny" data-install="torch" data-variant="gpu">${S.btn_torch_upgrade}</button>`;
+      }
+    } else {
+      statusHtml = `<span class="env-status-miss">${S.env_miss}</span>`;
+      if (env.gpu) {
+        actionsHtml = `
+          <select class="env-variant-select" id="torch-variant" title="${S.env_torch_variant_title}">
+            <option value="gpu" selected>${S.env_torch_gpu_opt}</option>
+            <option value="cpu">${S.env_torch_cpu_opt}</option>
+          </select>
+          <button class="btn ghost tiny" id="btn-install-torch">${S.btn_install}</button>
+          <span class="env-note" style="color:var(--warning)">${S.env_gpu_hint(env.gpuName)}</span>`;
+      } else {
+        actionsHtml = `<button class="btn ghost tiny" data-install="torch" data-variant="cpu">${S.btn_install} (CPU)</button>
+          <span class="env-note">${S.env_no_gpu_note}</span>`;
+      }
+    }
+    makeRow('🔢', S.env_torch_name, S.env_torch_note, statusHtml, actionsHtml);
+
+    // 有 GPU 时，安装按钮读取下拉值
+    if (env.gpu && !env.torchInstalled) {
+      setTimeout(() => {
+        const btn = document.getElementById('btn-install-torch');
+        if (btn) btn.addEventListener('click', () => {
+          if (_envInstalling) return;
+          const v = document.getElementById('torch-variant')?.value || 'gpu';
+          startEnvInstall('torch', v);
+        });
+      }, 0);
+    }
+  }
+
+  makeRow('🎵', S.env_demucs_name, S.env_demucs_note,
+    env.demucs ? `<span class="env-status-ok">${S.env_ok}</span>` : `<span class="env-status-miss">${S.env_miss}</span>`,
+    env.demucs ? '' : `<button class="btn ghost tiny" data-install="demucs" data-variant="cpu">${S.btn_install}</button>`);
+
+  makeRow('🖥', S.env_gpu_name, S.env_gpu_note,
+    env.gpu
+      ? `<span class="env-status-ok">${S.env_gpu_ok(env.gpuName)}</span>`
+      : `<span class="env-status-miss">${S.env_gpu_miss}</span>`);
+
+  // 必要依赖（python + faster-whisper）全部就绪 → 存标志，之后启动不再自动弹警告
+  const allReady = env.python && env.fasterWhisper;
+  if (config) {
+    const newEnvComplete = allReady ? true : false;
+    if (newEnvComplete !== config.envComplete) {
+      window.api.saveConfig({ ...config, envComplete: newEnvComplete });
+      config.envComplete = newEnvComplete;
+    }
+  }
+
+  // 绑定安装按钮（variant 已烘焙在 data-variant 属性里）
+  rows.querySelectorAll('[data-install]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (_envInstalling) return;
+      startEnvInstall(btn.dataset.install, btn.dataset.variant || 'cpu');
+    });
+  });
+}
+
+function startEnvInstall(pkg, variant) {
+  if (_envInstalling) return;
+  _envInstalling = true;
+
+  const box = $('#env-install-box');
+  const labelEl = $('#env-install-label');
+  const fillEl = $('#env-progress-fill');
+  const lineEl = $('#env-install-line');
+  box.classList.remove('hidden');
+  const variantLabel = pkg === 'torch' ? `（${variant === 'gpu' ? 'GPU 版' : 'CPU 版'}）` : '';
+  labelEl.textContent = `正在安装 ${pkg}${variantLabel}…`;
+  fillEl.style.width = '0%';
+  lineEl.textContent = '';
+
+  window.api.onInstallProgress(({ label, progress, line }) => {
+    labelEl.textContent = S.install_ing(label);
+    fillEl.style.width = Math.min(progress, 95) + '%';
+    lineEl.textContent = line || '';
+  });
+
+  window.api.onInstallDone(({ code, error }) => {
+    _envInstalling = false;
+    if (code === 0) {
+      fillEl.style.width = '100%';
+      labelEl.textContent = S.install_done;
+      lineEl.textContent = '';
+      setTimeout(() => { box.classList.add('hidden'); refreshEnvStatus(); }, 1500);
+    } else {
+      labelEl.textContent = S.install_fail;
+      lineEl.textContent = error || S.install_fail_hint;
+      fillEl.style.background = 'var(--danger)';
+      setTimeout(() => {
+        box.classList.add('hidden');
+        fillEl.style.background = '';
+      }, 4000);
+    }
+  });
+
+  window.api.installDep({ pkg, variant });
 }
 
 async function refreshAllModelDropdowns() {
@@ -569,17 +1004,17 @@ async function refreshAllModelDropdowns() {
 
   // 并发检测所有 Whisper 模型
   const whisperResults = await Promise.all(
-    WHISPER_MODELS.map(([v]) => window.api.whisperModelStatus(whisperDir, v).then(ok => [v, ok]))
+    WHISPER_MODELS().map(([v]) => window.api.whisperModelStatus(whisperDir, v).then(ok => [v, ok]))
   );
   const whisperDownloaded = new Set(whisperResults.filter(([, ok]) => ok).map(([v]) => v));
-  fillSelect($('#set-whisper-model'), WHISPER_MODELS, currentWhisper, whisperDownloaded);
+  fillSelect($('#set-whisper-model'), WHISPER_MODELS(), currentWhisper, whisperDownloaded);
 
   // 并发检测所有 Demucs 模型（按签名精确判断每个）
   const demucsResults = await Promise.all(
-    DEMUCS_MODELS.map(([v]) => window.api.demucsModelStatus(demucsDir, v).then(ok => [v, ok]))
+    DEMUCS_MODELS().map(([v]) => window.api.demucsModelStatus(demucsDir, v).then(ok => [v, ok]))
   );
   const demucsDownloaded = new Set(demucsResults.filter(([, ok]) => ok).map(([v]) => v));
-  fillSelect($('#set-demucs-model'), DEMUCS_MODELS, currentDemucs, demucsDownloaded);
+  fillSelect($('#set-demucs-model'), DEMUCS_MODELS(), currentDemucs, demucsDownloaded);
 
   // 当前选中模型是否已下载
   const wOk = whisperDownloaded.has(currentWhisper);
@@ -587,24 +1022,25 @@ async function refreshAllModelDropdowns() {
 
   // status tag（缩短文字，避免挤占下拉宽度）
   const wTag = $('#whisper-model-status');
-  if (wTag) { wTag.textContent = wOk ? '已下载' : '未下载'; wTag.className = `status-tag ${wOk?'ok':'miss'}`; }
+  if (wTag) { wTag.textContent = wOk ? S.model_downloaded : S.model_not_downloaded; wTag.className = `status-tag ${wOk?'ok':'miss'}`; }
   const dTag = $('#demucs-model-status');
-  if (dTag) { dTag.textContent = dOk ? '已下载' : '未下载'; dTag.className = `status-tag ${dOk?'ok':'miss'}`; }
+  if (dTag) { dTag.textContent = dOk ? S.model_downloaded : S.model_not_downloaded; dTag.className = `status-tag ${dOk?'ok':'miss'}`; }
   $('#btn-dl-whisper')?.classList.toggle('hidden', wOk);
   $('#btn-dl-demucs')?.classList.toggle('hidden', dOk);
 
   // 左侧外部图标：已下载(=使用中) → ‖ 双竖杠；未下载 → 空心圆
   const wi = $('#whisper-active-icon');
-  if (wi) { wi.dataset.ok = wOk ? '1' : '0'; wi.title = wOk ? '已下载并使用中' : '未下载'; }
+  if (wi) { wi.dataset.ok = wOk ? '1' : '0'; wi.title = wOk ? S.model_downloaded : S.model_not_downloaded; }
   const di = $('#demucs-active-icon');
-  if (di) { di.dataset.ok = dOk ? '1' : '0'; di.title = dOk ? '已下载并使用中' : '未下载'; }
+  if (di) { di.dataset.ok = dOk ? '1' : '0'; di.title = dOk ? S.model_downloaded : S.model_not_downloaded; }
 }
 
 function updatePythonStatus() {
   const tag = $('#python-status');
-  const p = $('#set-python').value;
-  if (p) { tag.textContent = '已设置'; tag.className = 'status-tag ok'; }
-  else { tag.textContent = '将自动检测'; tag.className = 'status-tag miss'; }
+  if (!tag) return;
+  const p = $('#set-python')?.value || '';
+  if (p) { tag.textContent = S.python_set; tag.className = 'status-tag ok'; }
+  else { tag.textContent = S.python_auto; tag.className = 'status-tag miss'; }
 }
 
 // 刷新 Whisper 模型下载状态 + 显隐下载按钮 + 动态目录标签
@@ -615,13 +1051,13 @@ async function refreshWhisperModelStatus() {
   const tag = $('#whisper-model-status');
   const btn = $('#btn-dl-whisper');
   if (ok) {
-    tag.textContent = '已下载'; tag.className = 'status-tag ok';
+    tag.textContent = S.model_downloaded; tag.className = 'status-tag ok';
     btn.classList.add('hidden');
-    $('#whisper-dir-label').textContent = 'Whisper 模型目录';
+    $('#whisper-dir-label').textContent = S.whisper_dir_label;
   } else {
-    tag.textContent = '未下载'; tag.className = 'status-tag miss';
+    tag.textContent = S.model_not_downloaded; tag.className = 'status-tag miss';
     btn.classList.remove('hidden');
-    $('#whisper-dir-label').textContent = 'Whisper 模型存储目录（下载位置）';
+    $('#whisper-dir-label').textContent = S.whisper_dir_label_dl;
   }
   updateModelDlHint();
 }
@@ -634,13 +1070,13 @@ async function refreshDemucsModelStatus() {
   const tag = $('#demucs-model-status');
   const btn = $('#btn-dl-demucs');
   if (ok) {
-    tag.textContent = '已下载'; tag.className = 'status-tag ok';
+    tag.textContent = S.model_downloaded; tag.className = 'status-tag ok';
     btn.classList.add('hidden');
-    $('#demucs-dir-label').textContent = 'Demucs 模型目录';
+    $('#demucs-dir-label').textContent = S.demucs_dir_label;
   } else {
-    tag.textContent = '未下载'; tag.className = 'status-tag miss';
+    tag.textContent = S.model_not_downloaded; tag.className = 'status-tag miss';
     btn.classList.remove('hidden');
-    $('#demucs-dir-label').textContent = 'Demucs 模型存储目录（下载位置）';
+    $('#demucs-dir-label').textContent = S.demucs_dir_label_dl;
   }
   updateModelDlHint();
 }
@@ -656,10 +1092,10 @@ async function refreshModelStatus() {
   const det = await window.api.detectModels();
   const wTag = $('#whisper-status');
   const dTag = $('#demucs-status');
-  if (det.whisperDir) { wTag.textContent = '已检测到'; wTag.className = 'status-tag ok'; }
-  else { wTag.textContent = '未检测到'; wTag.className = 'status-tag miss'; }
-  if (det.demucsCacheDir) { dTag.textContent = '已检测到'; dTag.className = 'status-tag ok'; }
-  else { dTag.textContent = '未检测，首次将下载'; dTag.className = 'status-tag miss'; }
+  if (det.whisperDir) { wTag.textContent = S.model_detected; wTag.className = 'status-tag ok'; }
+  else { wTag.textContent = S.model_not_detected; wTag.className = 'status-tag miss'; }
+  if (det.demucsCacheDir) { dTag.textContent = S.model_detected; dTag.className = 'status-tag ok'; }
+  else { dTag.textContent = S.model_not_detected_dl; dTag.className = 'status-tag miss'; }
 }
 
 async function saveSettings() {
@@ -674,10 +1110,12 @@ async function saveSettings() {
     defaultOutputFormat: $('#set-default-fmt')?.value || 'md',
     theme: $('#set-theme').value,
     accent: $('#set-accent').value,
+    lang: $('#set-lang')?.value || '',
   };
   await window.api.saveConfig(next);
   config = await window.api.getConfig();
   applyTheme(config);
+  await loadExternalLang(next.lang || '');
   $('#settings-modal').classList.add('hidden');
 }
 
@@ -702,8 +1140,8 @@ function categoryOf(t) {
 
 // 状态 → 中文
 function statusText(s) {
-  return ({ running: '处理中', retrying: '等待重试', queued: '排队中',
-    done: '已完成', error: '失败', canceled: '已取消' })[s] || s;
+  return ({ running: S.status_running, retrying: S.status_retrying, queued: S.status_queued,
+    done: S.status_done, error: S.status_error, canceled: S.status_canceled })[s] || s;
 }
 
 // 渲染主入口：原地更新 DOM（不重建 innerHTML），避免入场动画反复重放导致的闪烁
@@ -745,7 +1183,7 @@ function createCardEl(t) {
       '<span class="card-name"></span>' +
       '<span class="card-tag-slot"></span>' +
       '<span class="card-actions"></span>' +
-      '<span class="card-arrow" title="查看详情">›</span>' +
+      `<span class="card-arrow" title="${S.card_detail_title}">›</span>` +
     '</div>' +
     '<div class="progress"><div class="progress-fill"></div></div>' +
     '<div class="card-meta"></div>';
@@ -770,7 +1208,7 @@ function updateCardEl(el, t) {
   nameEl.title = t.name;
 
   el.querySelector('.card-tag-slot').innerHTML =
-    t.music ? '<span class="card-tag music">含音乐</span>' : '';
+    t.music ? `<span class="card-tag music">${S.tag_music}</span>` : '';
 
   // 进度条：indeterminate 用 CSS 动画扫光；determinate 设 width 走平滑过渡
   const fill = el.querySelector('.progress-fill');
@@ -798,15 +1236,15 @@ function metaHtml(t) {
   const isRunning = t.status === 'running' || t.status === 'retrying';
   const isDone = t.status === 'done';
   if (isRunning) {
-    let stepTxt = escapeHtml(t.step || '处理中');
+    let stepTxt = escapeHtml(t.step || S.status_running);
     if (t.stepTotal > 1 && t.stepNum) stepTxt = `第${t.stepNum}/${t.stepTotal}步 · ` + stepTxt;
-    const eta = t.etaMin ? ` · 预计 ${t.etaMin} 分` : '';
-    const elapsed = `<span class="elapsed" data-start="${t.startTs || 0}">用时 ${fmtElapsed(t.startTs)}</span>`;
-    const pct = t.indeterminate ? '<span class="pct dim">处理中…</span>' : `<span class="pct">${t.pct}%</span>`;
+    const eta = t.etaMin ? S.step_eta(t.etaMin) : '';
+    const elapsed = `<span class="elapsed" data-start="${t.startTs || 0}">${S.step_elapsed(fmtElapsed(t.startTs))}</span>`;
+    const pct = t.indeterminate ? `<span class="pct dim">${S.step_indeterminate}</span>` : `<span class="pct">${t.pct}%</span>`;
     return `<span class="step">${stepTxt}${eta}</span>${elapsed}${pct}`;
   }
-  if (isDone) return `<span class="step">完成</span><span class="pct">100%</span>`;
-  if (t.status === 'queued') return `<span class="step">排队等待中…</span>`;
+  if (isDone) return `<span class="step">${S.step_done}</span><span class="pct">${S.pct_done}</span>`;
+  if (t.status === 'queued') return `<span class="step">${S.step_queued}</span>`;
   return `<span class="step">${escapeHtml(t.step || statusText(t.status))}</span>`;
 }
 
@@ -814,12 +1252,12 @@ function actionsHtml(t) {
   const isRunning = t.status === 'running' || t.status === 'retrying';
   const isDone = t.status === 'done';
   if (isRunning || t.status === 'queued') {
-    return `<button class="icon-btn danger" data-cancel="${t.id}">✕ 取消</button>`;
+    return `<button class="icon-btn danger" data-cancel="${t.id}">${S.btn_cancel_task}</button>`;
   } else if (isDone) {
-    return `<button class="icon-btn ok" data-open="${escapeAttr(t.outFile || '')}">📂 打开</button>` +
-           `<button class="icon-btn" data-remove="${t.id}">移除</button>`;
+    return `<button class="icon-btn ok" data-open="${escapeAttr(t.outFile || '')}">${S.btn_open_folder}</button>` +
+           `<button class="icon-btn" data-remove="${t.id}">${S.btn_remove}</button>`;
   }
-  return `<button class="icon-btn" data-remove="${t.id}">移除</button>`;
+  return `<button class="icon-btn" data-remove="${t.id}">${S.btn_remove}</button>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -849,10 +1287,10 @@ function renderDetail() {
   if (!indet) fill.style.width = (isDone ? 100 : (t.pct || 0)) + '%';
 
   $('#detail-pct').textContent =
-    isDone ? '100%' : (indet ? '处理中…' : (t.pct || 0) + '%');
+    isDone ? S.pct_done : (indet ? S.step_indeterminate : (t.pct || 0) + '%');
 
   const stepLabel = (t.stepNum && t.stepTotal)
-    ? `第 ${t.stepNum} 步 / 共 ${t.stepTotal} 步 · ${t.step || ''}`
+    ? S.detail_step_of(t.stepNum, t.stepTotal, t.step || '')
     : (t.step || statusText(t.status));
   $('#detail-step').textContent = stepLabel;
 
@@ -861,9 +1299,9 @@ function renderDetail() {
     ? ` · ${fmtSec(t.processedSec)} / ${fmtSec(t.totalSec)}`
     : '';
   let banner;
-  if (isDone) banner = '✓ 已完成';
+  if (isDone) banner = `✓ ${S.status_done}`;
   else if (isError) banner = t.step || statusText(t.status);
-  else if (t.status === 'queued') banner = '排队等待中…';
+  else if (t.status === 'queued') banner = S.step_queued;
   else banner = stepLabel + procTxt;     // running/retrying
   $('#detail-status').textContent = banner;
 
@@ -871,13 +1309,13 @@ function renderDetail() {
     (t.processedSec != null && t.totalSec)
       ? `${fmtSec(t.processedSec)} / ${fmtSec(t.totalSec)}`
       : '—';
-  $('#detail-duration').textContent = t.durationMin ? `${t.durationMin} 分钟` : '—';
-  $('#detail-eta').textContent = t.etaMin ? `约 ${t.etaMin} 分钟` : '—';
+  $('#detail-duration').textContent = t.durationMin ? S.detail_duration_val(t.durationMin) : '—';
+  $('#detail-eta').textContent = t.etaMin ? S.detail_eta_val(t.etaMin) : '—';
   $('#detail-elapsed').textContent =
     (t.status === 'running' || t.status === 'retrying') ? fmtElapsed(t.startTs)
-      : (isDone ? '已完成' : '—');
-  $('#detail-fmt').textContent = FMT_LABELS[t.outputFormat] || '纯文本';
-  $('#detail-music').textContent = t.music ? '是（含人声分离）' : '否';
+      : (isDone ? S.detail_done : '—');
+  $('#detail-fmt').textContent = FMT_LABELS()[t.outputFormat] || S.fmt_txt;
+  $('#detail-music').textContent = t.music ? S.detail_music_yes : S.detail_music_no;
   $('#detail-outdir').textContent = t.outDir || '—';
 
   const openBtn = $('#detail-open-folder');
@@ -934,7 +1372,7 @@ function startElapsedTimer() {
   elapsedTimer = setInterval(() => {
     document.querySelectorAll('.elapsed').forEach(el => {
       const start = Number(el.dataset.start);
-      if (start) el.textContent = `用时 ${fmtElapsed(start)}`;
+      if (start) el.textContent = S.step_elapsed(fmtElapsed(start));
     });
     if (detailTaskId != null) {
       const t = tasks.find(x => x.id === detailTaskId);
@@ -963,61 +1401,94 @@ function triggerUFOEaster() {
   const empty = $('#empty-state');
   const flyer = $('#ufo-flyer');
   const body = $('#ufo-art');
-  const beamWrap = $('#ufo-beam-wrap');
-  const beamLight = beamWrap?.querySelector('.ufo-beam-light');
   const emblem = $('#emblem-proj');
   const pool = $('#ground-pool');
-  if (!empty || !flyer || !beamWrap || !beamLight || !emblem || !pool) return;
+  if (!empty || !flyer || !body || !emblem || !pool || !window.__beam) return;
+
+  const root = document.documentElement;
+  const BASE_TILT = parseFloat(getComputedStyle(root).getPropertyValue('--ufo-tilt')) || 10;
+  const uw = parseFloat(getComputedStyle(root).getPropertyValue('--uw')) || 110;
+
+  // 绝对坐标三次贝塞尔飞行：从 (ax,ay) 飞到 (bx,by)，两个绝对控制点
+  // banking 侧倾：飞碟没有前后之分，只随横向加速侧倾（不朝向目标）
+  function flyTo(ax, ay, bx, by, c1x, c1y, c2x, c2y, dur, cb) {
+    const start = performance.now();
+    let lx = ax;
+    function step(now) {
+      const t = Math.min(1, (now - start) / dur);
+      const u = 1 - t;
+      const x = u*u*u*ax + 3*u*u*t*c1x + 3*u*t*t*c2x + t*t*t*bx;
+      const y = u*u*u*ay + 3*u*u*t*c1y + 3*u*t*t*c2y + t*t*t*by;
+      flyer.style.transform = `translate(${x.toFixed(2)}px,${y.toFixed(2)}px)`;
+      // banking：仅用横向速度分量，BASE_TILT 叠加，clamp 防光束丢失
+      const vx = x - lx; lx = x;
+      if (window.__beam) {
+        const bank = Math.max(-20, Math.min(20, vx * 2.8));
+        window.__beam._setTiltTarget(BASE_TILT + bank);
+      }
+      if (t < 1) requestAnimationFrame(step);
+      else cb && cb();
+    }
+    requestAnimationFrame(step);
+  }
 
   // 初始化
-  empty.classList.add('egg-active');       // 隐藏黄色光柱
-  beamWrap.style.opacity = '0';
-  beamLight.style.animation = 'none';
+  empty.classList.add('egg-active');
   emblem.style.animation = 'none'; emblem.style.opacity = '0';
-  pool.style.animation = 'none'; pool.style.opacity = '0';
-  body.classList.add('frozen');            // 冻结浮动→平滑飞行
+  pool.style.animation   = 'none'; pool.style.opacity   = '0';
+  body.classList.add('frozen');
+  flyer.style.animation = 'none';
+  flyer.style.transform = 'translate(0,0)';
 
-  // 0ms: flyer 平滑飞向右上
-  flyer.style.animation = 'ufoFlyRight 1.1s cubic-bezier(0.22,0.7,0.2,1) forwards';
+  // 停泊位：右上方
+  const PX = uw * 1.6, PY = -uw * 1.05;
 
-  // 820ms: 光束从发光口向下展开 + 地面光池渐显
+  // ── 飞出：cp2=终点 → 到站速度为零（平滑停止）；提前 350ms 激活 aim，倾角在到站前就开始转 ──
+  flyTo(0, 0,  PX, PY,
+    -uw*0.08, PY*0.45,  // cp1：轻微左上拱（决定弧线形状）
+     PX, PY,            // cp2=终点：切线速度→0，平滑减速停止
+    1350, null);
+
+  // 提前 350ms 激活 aim，beam 和倾角开始缓动过渡（到站时已部分到位，无突变感）
   setTimeout(() => {
-    beamWrap.style.opacity = '1';
-    beamLight.style.animation = 'beamExpand 0.7s cubic-bezier(0.15,0,0.5,1) forwards';
+    window.__beam.aim();
     pool.style.animation = 'poolFade 0.7s ease forwards';
-  }, 820);
+  }, 1000);
 
-  // 1480ms: 党徽在地面光池中从焦外渐清晰（带透视压缩）
+  // 停稳后党徽渐现
   setTimeout(() => {
     emblem.style.animation = 'symbolAppear 0.85s cubic-bezier(0.2,0,0.4,1) forwards';
-  }, 1480);
+  }, 1750);
 
-  // 4700ms: 党徽先消失
+  // 党徽消失
   setTimeout(() => {
     emblem.style.animation = 'symbolFade 0.5s ease-in forwards';
-  }, 4700);
+  }, 4900);
 
-  // 5250ms: 光束收回 + 光池淡出
+  // 光束复位（banking 也随之缓动回 BASE_TILT）
   setTimeout(() => {
-    beamLight.style.animation = 'beamRetract 0.65s cubic-bezier(0.35,0,0.75,1) forwards';
+    window.__beam.normal();
     pool.style.animation = 'poolFade 0.6s ease reverse forwards';
-  }, 5250);
+  }, 5400);
 
-  // 5950ms: UFO 飞回
+  // 飞回：cp1=起点 → 起步速度为零（平滑启动）；cp2 偏左下让轨迹有弧度
   setTimeout(() => {
-    beamWrap.style.opacity = '0';
-    flyer.style.animation = 'ufoFlyBack 1.0s cubic-bezier(0.3,0.6,0.3,1) forwards';
-  }, 5950);
+    flyTo(PX, PY,  0, 0,
+      PX, PY,            // cp1=起点：初速为零，平滑启动
+      uw*0.2, PY*0.15,   // cp2：弧线收向原点
+      1200, null);
+  }, 5900);
 
-  // 7000ms: 全部恢复
+  // 全部归零
   setTimeout(() => {
     empty.classList.remove('egg-active');
+    flyer.style.transform = '';
     flyer.style.animation = '';
     body.classList.remove('frozen');
-    beamLight.style.animation = 'none';
     emblem.style.animation = 'none'; emblem.style.opacity = '0';
-    pool.style.animation = 'none'; pool.style.opacity = '0';
-  }, 7000);
+    pool.style.animation   = 'none'; pool.style.opacity   = '0';
+    if (window.__beam) window.__beam.normal();
+  }, 7200);
 }
 
 function hexToHsl(hex) {

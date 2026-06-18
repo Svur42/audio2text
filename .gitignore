@@ -11,6 +11,14 @@ Thumbs.db
 # 运行时配置（含本机路径，不应入库）
 config.json
 
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 临时脚本
+tmp_*.py
+tmp_*.js
+
 # 编辑器
 .vscode/
 .idea/

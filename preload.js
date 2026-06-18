@@ -49,4 +49,23 @@ contextBridge.exposeInMainWorld('api', {
   // 事件监听
   onTasksUpdate: (cb) => ipcRenderer.on('tasks:update', (_e, list) => cb(list)),
   onWarnings: (cb) => ipcRenderer.on('app:warnings', (_e, msgs) => cb(msgs)),
+
+  // 语言包
+  listLangs: () => ipcRenderer.invoke('lang:list'),
+  loadLang: (filePath) => ipcRenderer.invoke('lang:load', filePath),
+  importLang: (srcPath) => ipcRenderer.invoke('lang:import', srcPath),
+  exportLangTemplate: () => ipcRenderer.invoke('lang:export-template'),
+  pickLangFile: () => ipcRenderer.invoke('lang:pick-file'),
+
+  // 环境检测与依赖安装
+  checkEnv: () => ipcRenderer.invoke('env:check'),
+  installDep: (payload) => ipcRenderer.send('env:install', payload),
+  onInstallProgress: (cb) => {
+    ipcRenderer.removeAllListeners('env:install:progress');
+    ipcRenderer.on('env:install:progress', (_e, d) => cb(d));
+  },
+  onInstallDone: (cb) => {
+    ipcRenderer.removeAllListeners('env:install:done');
+    ipcRenderer.on('env:install:done', (_e, d) => cb(d));
+  },
 });

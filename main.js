@@ -1,5 +1,7 @@
 'use strict';
 
+const S = require('./renderer/strings.js');
+
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -120,10 +122,10 @@ function dirHasWhisperModel(root) {
 function detectModels() {
   const result = { whisperDir: null, demucsCacheDir: null };
 
-  // Whisper：候选根目录
+  // Whisper：候选根目录（常见安装位置）
   const whisperCandidates = [
-    'D:\\数据\\AI\\whisper-models',
     path.join(os.homedir(), '.cache', 'huggingface', 'hub'),
+    path.join(os.homedir(), 'whisper-models'),
   ];
   for (const c of whisperCandidates) {
     if (dirHasWhisperModel(c)) { result.whisperDir = c; break; }
@@ -180,11 +182,11 @@ function selfCheck(cfg) {
   const problems = [];
   const py = cfg.pythonPath;
   if (!py || !fs.existsSync(py)) {
-    problems.push('未找到 Python（请在设置里指定 python.exe，并确保已 pip install faster-whisper demucs）');
+    problems.push(S.warn_no_python);
   }
   const pipe = resolvePipeline(cfg);
   if (!fs.existsSync(pipe)) {
-    problems.push(`找不到后端脚本 pipeline.py：${pipe}`);
+    problems.push(S.warn_no_pipeline(pipe));
   }
 
   // 检查 ffprobe，再检查 Python 包（链式，避免并发启动多个进程）
@@ -192,9 +194,9 @@ function selfCheck(cfg) {
     const checkPackages = () => {
       if (!py || !fs.existsSync(py)) { resolve(problems); return; }
       execFile(py, ['-c', 'import faster_whisper'], { timeout: 8000 }, (err) => {
-        if (err) problems.push('Python 环境未安装 faster-whisper，请运行：pip install faster-whisper');
+        if (err) problems.push(S.warn_no_fw);
         execFile(py, ['-c', 'import demucs'], { timeout: 8000 }, (err2) => {
-          if (err2) problems.push('Python 环境未安装 demucs（"有背景音乐"功能不可用），可运行：pip install demucs');
+          if (err2) problems.push(S.warn_no_demucs);
           resolve(problems);
         });
       });
@@ -203,7 +205,7 @@ function selfCheck(cfg) {
     const candidates = cfg.ffmpegDir ? [path.join(cfg.ffmpegDir, 'ffprobe.exe')] : [];
     if (candidates.find(p => fs.existsSync(p))) { checkPackages(); return; }
     execFile('ffprobe', ['-version'], { timeout: 5000 }, (err) => {
-      if (err) problems.push('未找到 ffmpeg/ffprobe（请安装 ffmpeg 并加入 PATH，或在设置里指定目录）');
+      if (err) problems.push(S.warn_no_ffmpeg);
       checkPackages();
     });
   });
@@ -326,7 +328,7 @@ async function runNext() {
   t.status = 'running';
   t.startTs = Date.now();
   t.pct = 0;
-  t.step = '准备中...';
+  t.step = S.step_preparing;
   pushTaskState();
 
   // 启动前等显存（取消/上个任务刚结束时尤为关键）
@@ -375,15 +377,15 @@ function startProcess(t, cfg, isRetry) {
     // CPU 模式警告（无 CUDA 时速度极慢）
     if (/计算设备：CPU/i.test(line)) {
       safeSend('app:warnings',
-        ['当前以 CPU 模式运行（未检测到 CUDA GPU），转写和人声分离速度均较慢。建议在设置里切换为更小的模型以提升速度。']);
+        [S.warn_cpu_mode]);
     }
 
     // 友好处理 Python 包缺失错误（从 stderr 捕获后推到 step）
     if (/ModuleNotFoundError.*faster_whisper|No module named.*faster.whisper/i.test(line)) {
-      t.step = '缺少依赖：请运行 pip install faster-whisper'; pushTaskState();
+      t.step = S.step_no_fw; pushTaskState();
     }
     if (/ModuleNotFoundError.*demucs|No module named.*demucs/i.test(line)) {
-      t.step = '缺少依赖：请运行 pip install demucs'; pushTaskState();
+      t.step = S.step_no_demucs; pushTaskState();
     }
 
     let m;
@@ -416,19 +418,19 @@ function startProcess(t, cfg, isRetry) {
       return;
     }
     if (/正在分离人声/.test(line)) {
-      t.step = '正在分离人声';
+      t.step = S.step_separating;
       t.indeterminate = true;
       pushTaskState();
       return;
     }
     if (/正在加载|正在下载\s*Whisper/.test(line)) {
-      t.step = '加载模型中';
+      t.step = S.step_loading_model;
       t.indeterminate = true;
       pushTaskState();
       return;
     }
     if (/转写中/.test(line)) {
-      t.step = '正在转写';
+      t.step = S.step_transcribing;
       t.indeterminate = false;
       pushTaskState();
       return;
@@ -474,13 +476,13 @@ function startProcess(t, cfg, isRetry) {
       t.status = 'done';
       t.pct = 100;
       t.indeterminate = false;
-      t.step = '完成';
+      t.step = S.step_complete;
       runningId = null;
     } else if (sawOOM && !isRetry) {
       // OOM 自动重试一次：保持 runningId 占位（避免等待期并发启动其它任务），
       // 用独立的 retrying 态以便此期间可被取消
       t.status = 'retrying';
-      t.step = '显存不足，等待后重试...';
+      t.step = S.step_oom_retry;
       t.indeterminate = true;
       pushTaskState();
       cleanupTemp();
@@ -498,7 +500,7 @@ function startProcess(t, cfg, isRetry) {
       return;
     } else {
       t.status = 'error';
-      t.step = sawOOM ? '失败：显存不足' : `失败（退出码 ${code}）`;
+      t.step = sawOOM ? S.step_oom_fail : S.step_fail(code);
       runningId = null;
     }
     cleanupTemp();
@@ -510,7 +512,7 @@ function startProcess(t, cfg, isRetry) {
     t.proc = null;
     runningId = null;
     t.status = 'error';
-    t.step = `启动失败：${err.message}`;
+    t.step = S.step_start_fail(err.message);
     pushTaskState();
     setImmediate(runNext);
   });
@@ -531,7 +533,7 @@ async function cancelTask(id) {
   if (t.status === 'running' || t.status === 'retrying') {
     const proc = t.proc;
     t.status = 'canceled';
-    t.step = '已取消';
+    t.step = S.step_canceled;
     pushTaskState();
     if (proc && proc.pid) {
       await killTaskTree(proc.pid);
@@ -639,6 +641,227 @@ ipcMain.on('model:download', (event, { type, modelName, demucsModel, whisperDir,
   child.on('error', (err) => senderSend('model:download:done', { type, code: 1, error: err.message }));
 });
 
+// ─── 环境检测 ──────────────────────────────────────────────────────────────
+ipcMain.handle('env:check', async () => {
+  const cfg = loadConfig();
+  const py = cfg.pythonPath || detectPython();
+  const result = { python: !!py, pythonPath: py, fasterWhisper: false, demucs: false, gpu: false, gpuName: null };
+  if (!py) return result;
+
+  const pyCheck = (code) => new Promise((resolve) => {
+    const c = spawn(py, ['-c', code], { timeout: 8000 });
+    let out = '';
+    c.stdout.on('data', d => { out += d; });
+    c.on('close', r => resolve(r === 0 ? out.trim() : null));
+    c.on('error', () => resolve(null));
+  });
+
+  const [fw, dm, tc] = await Promise.all([
+    pyCheck('import faster_whisper; print("ok")'),
+    pyCheck('import demucs; print("ok")'),
+    pyCheck('import torch; print("cuda" if torch.cuda.is_available() else "cpu")'),
+  ]);
+  result.fasterWhisper = fw === 'ok';
+  result.demucs = dm === 'ok';
+  result.torchInstalled = tc === 'cuda' || tc === 'cpu';
+  result.torchCuda = tc === 'cuda';   // true = GPU(CUDA)版；false = CPU版或未安装
+
+  await new Promise((resolve) => {
+    const ns = spawn('nvidia-smi', ['--query-gpu=name', '--format=csv,noheader'], { timeout: 5000 });
+    let out = '';
+    ns.stdout.on('data', d => { out += d; });
+    ns.on('close', code => {
+      if (code === 0 && out.trim()) { result.gpu = true; result.gpuName = out.trim().split('\n')[0].trim(); }
+      resolve();
+    });
+    ns.on('error', resolve);
+  });
+
+  return result;
+});
+
+// ─── 依赖安装（带进度流） ────────────────────────────────────────────────────
+ipcMain.on('env:install', (event, { pkg, variant }) => {
+  const cfg = loadConfig();
+  const py = cfg.pythonPath || detectPython();
+  const send = (ev, d) => { try { event.sender.send(ev, d); } catch (_) {} };
+
+  if (!py) { send('env:install:done', { pkg, code: 1, error: S.env_install_no_python }); return; }
+
+  // 构建安装步骤序列
+  const steps = [];
+  if (pkg === 'faster-whisper') {
+    steps.push({ label: 'faster-whisper', args: ['-m', 'pip', 'install', 'faster-whisper'] });
+  } else if (pkg === 'torch') {
+    if (variant === 'gpu') {
+      steps.push({ label: 'PyTorch（GPU/CUDA）', args: ['-m', 'pip', 'install', 'torch', '--index-url', 'https://download.pytorch.org/whl/cu121'] });
+    } else {
+      steps.push({ label: 'PyTorch（CPU）', args: ['-m', 'pip', 'install', 'torch'] });
+    }
+  } else if (pkg === 'demucs') {
+    steps.push({ label: 'demucs', args: ['-m', 'pip', 'install', 'demucs'] });
+  }
+
+  let stepIdx = 0;
+  const runStep = () => {
+    if (stepIdx >= steps.length) { send('env:install:done', { pkg, code: 0 }); return; }
+    const { label, args } = steps[stepIdx];
+    const stepBase = stepIdx / steps.length;       // 0.0 ~ 1.0（本步起始）
+    const stepRange = 1 / steps.length;            // 每步占总进度的比例
+    let dlPct = 0;                                 // 当前包下载百分比 0-100
+
+    const toTotal = (p) => Math.round((stepBase + stepRange * p / 100) * 90); // → 0-90%
+    send('env:install:progress', { pkg, label, progress: toTotal(0), line: `准备安装 ${label}…` });
+
+    const child = spawn(py, args, { env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' } });
+    let buf = '';
+
+    const parseLine = (raw) => {
+      // 去除 ANSI 颜色码、Unicode 进度条字符
+      const line = raw.replace(/\x1b\[[0-9;]*[mGKHF]/g, '').replace(/[━─▓█▒░]+/g, '').trim();
+      if (!line) return;
+
+      let progress, display;
+
+      // ① 实时下载进度：pip 输出 "X.X/Y.Y MB" 或 "X.X MB / Y.Y MB"
+      const dlMatch = line.match(/([\d.]+)\s*\/\s*([\d.]+)\s*(k?[Mm][Bb]|[Gg][Bb])/);
+      if (dlMatch) {
+        const cur = parseFloat(dlMatch[1]), tot = parseFloat(dlMatch[2]);
+        if (tot > 0) dlPct = Math.min(99, Math.round(cur / tot * 100));
+        // 速度/eta 提取（可选展示）
+        const etaM = line.match(/eta\s+([\d:]+)/i);
+        display = `下载中 ${dlPct}%` + (etaM ? `  剩余 ${etaM[1]}` : '');
+        progress = toTotal(dlPct * 0.8);  // 下载阶段占本步 0-80%
+        send('env:install:progress', { pkg, label, progress, line: display }); return;
+      }
+
+      // ② 阶段关键词
+      if (/Collecting/i.test(line))          { progress = toTotal(2);  display = `检查依赖: ${line.replace(/Collecting\s+/i, '')}`; }
+      else if (/Downloading/i.test(line))    { progress = toTotal(5);  display = `开始下载: ${line}`; }
+      else if (/Installing collected/i.test(line)) { progress = toTotal(82); display = '正在写入文件…'; }
+      else if (/Successfully installed/i.test(line)){ progress = toTotal(95); display = `✓ ${line}`; }
+      else if (/already satisfied/i.test(line))    { progress = toTotal(95); display = `✓ 已是最新版`; }
+      else if (/error|failed/i.test(line))         { progress = toTotal(dlPct); display = `⚠ ${line}`; }
+      else return; // 其余无意义行不推送
+
+      send('env:install:progress', { pkg, label, progress, line: display });
+    };
+
+    const onData = (d) => {
+      // pip 进度行用 \r 覆盖，需同时按 \n 和 \r 分割
+      buf += d.toString('utf8');
+      const parts = buf.split(/[\n\r]/); buf = parts.pop() || '';
+      parts.forEach(parseLine);
+    };
+    child.stdout.on('data', onData);
+    child.stderr.on('data', onData);
+    child.on('close', (code) => {
+      if (buf.trim()) parseLine(buf);
+      if (code !== 0) { send('env:install:done', { pkg, code, error: S.env_install_fail(label, code) }); return; }
+      stepIdx++;
+      runStep();
+    });
+    child.on('error', (err) => send('env:install:done', { pkg, code: 1, error: err.message }));
+  };
+  runStep();
+});
+
+// ─── 语言包 ─────────────────────────────────────────────────────────────────
+// 自定义语言文件存储在 userData/locales/，打包后持久存在，无需 exe 旁边额外文件夹
+function localesDir() {
+  return path.join(app.getPath('userData'), 'locales');
+}
+
+ipcMain.handle('lang:list', () => {
+  const dir = localesDir();
+  try {
+    if (!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir)
+      .filter(f => f.endsWith('.json'))
+      .map(f => {
+        const filePath = path.join(dir, f);
+        let name = f.replace(/\.json$/i, '');
+        try {
+          const obj = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+          if (obj.LANG_NAME) name = obj.LANG_NAME;
+        } catch (e) {}
+        return { name, path: filePath };
+      });
+  } catch (e) { return []; }
+});
+
+ipcMain.handle('lang:load', (_e, filePath) => {
+  try {
+    const obj = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    // 过滤掉 _ 前缀的说明键，只返回实际翻译键值
+    return Object.fromEntries(Object.entries(obj).filter(([k]) => !k.startsWith('_')));
+  } catch (e) { return null; }
+});
+
+// 导入翻译文件：复制到 userData/locales/，同名时询问是否覆盖，返回 {name, path} 或 null
+ipcMain.handle('lang:import', async (_e, srcPath) => {
+  try {
+    const dir = localesDir();
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const raw = fs.readFileSync(srcPath, 'utf-8');
+    const obj = JSON.parse(raw);
+    const langName = obj.LANG_NAME || path.basename(srcPath, '.json');
+    const dest = path.join(dir, path.basename(srcPath));
+    if (fs.existsSync(dest)) {
+      const { response } = await dialog.showMessageBox(mainWin, {
+        type: 'question',
+        title: '语言包已存在 / Language pack exists',
+        message: `"${langName}" 已导入过，是否覆盖？\nOverwrite existing "${langName}"?`,
+        buttons: ['覆盖 / Overwrite', '取消 / Cancel'],
+        defaultId: 0, cancelId: 1,
+      });
+      if (response === 1) return null;  // 用户取消
+    }
+    fs.copyFileSync(srcPath, dest);
+    return { name: langName, path: dest };
+  } catch (e) { return null; }
+});
+
+// 弹出文件选择器，只显示 JSON 文件
+ipcMain.handle('lang:pick-file', async () => {
+  const r = await dialog.showOpenDialog(mainWin, {
+    title: '选择翻译文件',
+    filters: [{ name: 'JSON 翻译文件', extensions: ['json'] }],
+    properties: ['openFile'],
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+
+// 导出双语模板（英文 | 中文）到用户选择的目录
+ipcMain.handle('lang:export-template', async () => {
+  const r = await dialog.showOpenDialog(mainWin, { properties: ['openDirectory'] });
+  if (r.canceled) return false;
+  const zh = require('./renderer/strings.js');
+  // 读英文参考（项目内）
+  let en = {};
+  try {
+    const enPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'locales', 'English.json')
+      : path.join(__dirname, 'locales', 'English.json');
+    if (fs.existsSync(enPath)) en = JSON.parse(fs.readFileSync(enPath, 'utf-8'));
+  } catch (e) {}
+  // 模板格式：值 = 英文（待翻译），_ 前缀键 = 说明（app 加载时忽略）
+  const template = {
+    '_instructions_en': 'HOW TO TRANSLATE: 1) Set LANG_NAME to your language name. 2) Replace each English value below with your translation. 3) Keys starting with _ are instructions — keep or delete them, the app ignores them. 4) Save the file. 5) Drag it into Audio2Text Settings → Language to import.',
+    '_instructions_zh': '翻译说明：1）将 LANG_NAME 改为您的语言名称。2）将每一行的英文值替换为您的翻译。3）以 _ 开头的键是说明行，可保留也可删除，导入时会被忽略。4）保存文件。5）拖入 Audio2Text 设置 → 界面语言 处导入即可生效。',
+    'LANG_NAME': 'Your Language Name',
+  };
+  Object.keys(en).forEach(k => {
+    if (k === 'LANG_NAME' || k.startsWith('_')) return;
+    if (typeof zh[k] === 'function') return;   // 跳过函数型键
+    template[k] = en[k] || '';                 // 值 = 英文（翻译者替换）
+  });
+  const dest = path.join(r.filePaths[0], 'translation-template.json');
+  fs.writeFileSync(dest, JSON.stringify(template, null, 2), 'utf-8');
+  shell.showItemInFolder(dest);
+  return true;
+});
+
 ipcMain.handle('dialog:pickDir', async () => {
   const r = await dialog.showOpenDialog(mainWin, { properties: ['openDirectory'] });
   return r.canceled ? null : r.filePaths[0];
@@ -720,10 +943,28 @@ ipcMain.handle('task:openFolder', (_e, filePath) => {
 // ---------------------------------------------------------------------------
 app.whenReady().then(async () => {
   createWindow();
+  // 首次启动：把内置 locales（English 等）复制到 userData/locales，用户无需手动导入
+  try {
+    const builtinLocales = app.isPackaged
+      ? path.join(process.resourcesPath, 'locales')
+      : path.join(__dirname, 'locales');
+    const userLocales = path.join(app.getPath('userData'), 'locales');
+    if (fs.existsSync(builtinLocales)) {
+      if (!fs.existsSync(userLocales)) fs.mkdirSync(userLocales, { recursive: true });
+      fs.readdirSync(builtinLocales).forEach(f => {
+        const dest = path.join(userLocales, f);
+        if (!fs.existsSync(dest)) fs.copyFileSync(path.join(builtinLocales, f), dest);
+      });
+    }
+  } catch (e) {}
   const cfg = loadConfig();
-  const problems = await selfCheck(cfg);
-  if (problems.length) {
-    mainWin.webContents.once('did-finish-load', () => safeSend('app:warnings', problems));
+  // 若之前已检测到环境完整，跳过启动自检（不打扰用户）
+  // 用户可在设置里点"重新检测"手动触发
+  if (!cfg.envComplete) {
+    const problems = await selfCheck(cfg);
+    if (problems.length) {
+      mainWin.webContents.once('did-finish-load', () => safeSend('app:warnings', problems));
+    }
   }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

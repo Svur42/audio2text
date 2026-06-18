@@ -1,10 +1,10 @@
 {
   "name": "audio2text",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "音频转文字桌面工具 — 本地 Whisper 转写，零 token",
   "main": "main.js",
-  "author": "",
-  "license": "MIT",
+  "author": "Svur42",
+  "license": "GPL-3.0",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win portable"
@@ -25,7 +25,8 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "backend", "to": "backend" }
+      { "from": "backend", "to": "backend" },
+      { "from": "locales", "to": "locales" }
     ],
     "win": {
       "target": "portable",

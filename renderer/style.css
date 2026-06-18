@@ -14,7 +14,7 @@
 
   /* UFO 彩蛋统一变量（改这里即可全局生效，无误差） */
   --ufo-tilt: 10deg;                       /* UFO 倾斜角（左侧上抬），所有相关计算引用它 */
-  --uw: clamp(86px, 11vmin, 132px);        /* UFO 宽度，随窗口缩放；UFO+光束均由它推导 */
+  --uw: clamp(96px, 12vmin, 146px);        /* UFO 宽度，随窗口缩放；UFO+光束均由它推导（整体略放大） */
   --beam-port: calc(var(--uw) * 0.2);      /* 发光口宽度（红/黄光束顶边同宽） */
   --beam-angle: 52deg;                     /* 红光束相对竖直方向的倾斜（向左下） */
 
@@ -127,20 +127,16 @@ html, body {
 
 /* ── Easter egg: UFO 飞右上角 + 斜向光束 ── */
 
-/* 正常状态黄色光柱：发光口与红光束顶边同宽(--beam-port)，彩蛋时隐藏 */
-.ufo-beam-normal {
-  position: absolute;
-  top: 80%; left: 50%; transform: translateX(-50%);
-  width: var(--beam-port); height: calc(var(--uw) * 0.42);
-  background:
-    radial-gradient(ellipse 70% 30% at 50% 0%, rgba(255,230,70,0.85), transparent 90%),
-    linear-gradient(to bottom, rgba(255,210,40,0.55) 0%, transparent 100%);
-  clip-path: polygon(8% 0%, 92% 0%, 200% 100%, -100% 100%);
+/* 光束（SVG）：JS 每帧按真实投影几何重算梯形——顶边=飞船发光口(绑定飞船，随浮动/飞行移动)，
+   左右边缘光线按固定半角延伸，触虚拟地面即截断；红/黄、倾角、扩散均做缓动过渡 */
+.ufo-beam-svg {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
   pointer-events: none;
-  transition: opacity 0.25s;
+  overflow: visible;
+  z-index: 0;            /* 常驻：在飞船(.ufo-wrap z-index:1)之下 */
 }
-/* 彩蛋激活：黄色光柱消失（同一发光口改发红光） */
-.empty.egg-active .ufo-beam-normal { opacity: 0; }
+.empty.egg-active .ufo-beam-svg { z-index: 1; }
 
 /* flyer 飞行：只做位移，单段平滑 ease-out（无停顿感） */
 @keyframes ufoFlyRight {
@@ -150,37 +146,6 @@ html, body {
 @keyframes ufoFlyBack {
   0%   { transform: translate(calc(var(--uw) * 1.55), calc(var(--uw) * -1.05)); }
   100% { transform: translate(0,0); }
-}
-
-/* 红色光束：flyer 子节点，从发光口(--beam-port 宽)向左下打出，长锥渐隐 */
-.ufo-beam-wrap {
-  position: absolute;
-  top: 76%; left: 50%;
-  transform: translateX(-50%) rotate(var(--beam-angle));
-  transform-origin: top center;
-  width: calc(var(--uw) * 1.9); height: calc(var(--uw) * 3.4);
-  pointer-events: none;
-  opacity: 0;
-  z-index: -1;
-}
-.ufo-beam-light {
-  position: absolute; inset: 0;
-  background:
-    linear-gradient(to bottom,
-      rgba(225,18,18,0.72) 0%,
-      rgba(205,8,8,0.34) 50%,
-      rgba(170,0,0,0.10) 80%,
-      transparent 100%);
-  clip-path: polygon(44% 0%, 56% 0%, 56% 0%, 44% 0%);
-}
-/* 顶边固定窄(=发光口)，仅底边外扩；底端越界以便被"地面"截断 */
-@keyframes beamExpand {
-  0%   { clip-path: polygon(44% 0%, 56% 0%, 56% 0%, 44% 0%); }
-  100% { clip-path: polygon(44% 0%, 56% 0%, 84% 86%, 16% 86%); }
-}
-@keyframes beamRetract {
-  0%   { clip-path: polygon(44% 0%, 56% 0%, 84% 86%, 16% 86%); }
-  100% { clip-path: polygon(44% 0%, 56% 0%, 56% 0%, 44% 0%); }
 }
 
 /* 地面光池：椭圆形（光斜射地面=圆被压扁成椭圆），位于内容区中心 */
@@ -198,6 +163,7 @@ html, body {
   filter: drop-shadow(0 0 18px rgba(255,210,0,0.8));
   opacity: 0;
   pointer-events: none;
+  z-index: 2;            /* 党徽显现在红光束(彩蛋 z-index:1)之上 */
 }
 /* 椭圆光池（地面被照亮的范围），在党徽下层 */
 .ground-pool {
@@ -212,13 +178,13 @@ html, body {
   opacity: 0; pointer-events: none; z-index: -1;
 }
 @keyframes symbolAppear {
-  0%   { opacity: 0; transform: translate(-50%,-50%) perspective(640px) rotateX(58deg) rotateZ(-6deg) scale(0.4); filter: blur(16px) drop-shadow(0 0 18px rgba(255,210,0,0.8)); }
-  55%  { filter: blur(3px) drop-shadow(0 0 18px rgba(255,210,0,0.8)); }
+  0%   { opacity: 0; transform: translate(-50%,-50%) perspective(640px) rotateX(58deg) rotateZ(-6deg) scale(0.4); filter: blur(8px) drop-shadow(0 0 18px rgba(255,210,0,0.8)); }
+  55%  { filter: blur(2px) drop-shadow(0 0 18px rgba(255,210,0,0.8)); }
   100% { opacity: 1; transform: translate(-50%,-50%) perspective(640px) rotateX(58deg) rotateZ(-6deg) scale(0.9); filter: blur(0) drop-shadow(0 0 18px rgba(255,210,0,0.8)); }
 }
 @keyframes symbolFade {
   0%   { opacity: 1; transform: translate(-50%,-50%) perspective(640px) rotateX(58deg) rotateZ(-6deg) scale(0.9); filter: blur(0); }
-  100% { opacity: 0; transform: translate(-50%,-50%) perspective(640px) rotateX(58deg) rotateZ(-6deg) scale(0.6); filter: blur(12px); }
+  100% { opacity: 0; transform: translate(-50%,-50%) perspective(640px) rotateX(58deg) rotateZ(-6deg) scale(0.6); filter: blur(6px); }
 }
 @keyframes poolFade { 0% { opacity: 0; } 100% { opacity: 1; } }
 
@@ -303,11 +269,11 @@ html, body {
 
 /* ---------- CSS 自制 UFO ---------- */
 /* 给 UFO 与下方文字留出大间距，避免重叠 */
-.ufo-wrap { position: relative; display: inline-flex; justify-content: center; margin-bottom: 70px; }
+.ufo-wrap { position: relative; z-index: 1; display: inline-flex; justify-content: center; margin-bottom: 96px; }
 /* flyer 承载飞行位移（彩蛋时 translate），默认无变换 */
 .ufo-flyer { position: relative; }
 .ufo-css {
-  width: var(--uw); height: calc(var(--uw) * 0.56);
+  width: var(--uw); height: calc(var(--uw) * 0.54);
   position: relative;
   animation: float 3s ease-in-out infinite;
   opacity: 0.85;
@@ -315,10 +281,10 @@ html, body {
   filter: drop-shadow(0 10px 22px rgba(0,0,0,0.45));
   transform-origin: center center;
 }
-/* 碟形主体（尺寸用 % 跟随 ufo-css，整体随窗口缩放） */
+/* 碟形主体（尺寸用 % 跟随 ufo-css，整体随窗口缩放）：扁而长，略加厚 */
 .ufo-disc {
   position: absolute; bottom: 0; left: 0; right: 0;
-  height: 82%;
+  height: 58%;
   background: radial-gradient(ellipse 80% 60% at 45% 35%,
     #d8d8e8 0%, #a0a0b8 40%, #686880 75%, #484860 100%);
   border-radius: 50%;
@@ -338,17 +304,17 @@ html, body {
     transparent 9px, transparent 20px
   );
 }
-/* 玻璃穹顶 */
+/* 玻璃穹顶：大圆球坐落在扁碟上，约 50% 露出碟面之上 */
 .ufo-dome {
   position: absolute; top: 0; left: 50%;
   transform: translateX(-50%);
-  width: 43%; height: 66%;
-  background: radial-gradient(ellipse 60% 70% at 38% 28%,
-    rgba(210,240,255,0.95) 0%,
-    rgba(140,190,240,0.8) 45%,
-    rgba(80,120,200,0.55) 100%);
-  border-radius: 50% 50% 50% 50% / 100% 100% 0% 0%;
-  box-shadow: 0 0 10px rgba(140,190,255,0.5), inset 0 2px 4px rgba(255,255,255,0.3);
+  width: 52%; height: 94%;
+  background: radial-gradient(circle at 36% 30%,
+    rgba(225,245,255,0.97) 0%,
+    rgba(150,195,240,0.82) 48%,
+    rgba(85,125,205,0.60) 100%);
+  border-radius: 50%;   /* 完整圆球，下半插入碟盘，露出上半为均匀圆弧 */
+  box-shadow: 0 0 10px rgba(140,190,255,0.5), inset 0 2px 5px rgba(255,255,255,0.35);
 }
 .empty-text { font-size: 15px; color: var(--text-dim); }
 .empty-sub { font-size: 13px; }
@@ -623,6 +589,33 @@ html, body {
 .status-tag { font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 6px; }
 .status-tag.ok { background: rgba(103,194,58,0.15); color: var(--success); }
 .status-tag.miss { background: rgba(245,108,108,0.15); color: var(--danger); }
+
+/* ── 环境配置区 ── */
+.env-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.env-row  { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius); background: var(--bg-card); }
+.env-icon { font-size: 15px; flex-shrink: 0; }
+.env-name { flex: 1; font-size: 13px; font-weight: 500; }
+.env-note { font-size: 11px; color: var(--text-dim); }
+.env-status-ok   { font-size: 12px; color: var(--success); font-weight: 600; }
+.env-status-miss { font-size: 12px; color: var(--danger);  font-weight: 600; }
+.env-status-checking { font-size: 12px; color: var(--text-dim); }
+.env-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.env-variant-select { font-size: 12px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-sidebar); color: var(--text); cursor: pointer; }
+
+.lang-row { display: flex; gap: 8px; align-items: center; }
+.lang-drop-zone {
+  flex-shrink: 0; width: 160px; height: 34px; line-height: 34px;
+  border: 1.5px dashed var(--border); border-radius: var(--radius);
+  font-size: 12px; color: var(--text-dim); text-align: center;
+  cursor: pointer; transition: var(--trans); user-select: none;
+}
+.lang-drop-zone.over { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.lang-drop-zone.ok   { border-color: var(--success); color: var(--success); }
+.env-install-box { margin: 4px 0 12px; padding: 10px 12px; border-radius: var(--radius); background: var(--bg-card); border: 1px solid var(--border); }
+.env-install-label { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.env-progress-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-bottom: 6px; }
+.env-progress-fill  { height: 100%; background: var(--accent); border-radius: 3px; width: 0%; transition: width 0.3s ease; }
+.env-install-line { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- 拖拽遮罩 ---------- */
 .drop-overlay {
