@@ -1,6 +1,21 @@
 'use strict';
 
 // ---------------------------------------------------------------------------
+// 渲染端日志缓冲（捕获 console 错误 + 下载进度，供"查看日志"面板使用）
+// ---------------------------------------------------------------------------
+const _rlogs = [];
+function _rlog(level, msg) {
+  const ts = new Date().toISOString().slice(11, 23);
+  _rlogs.push(`[${ts}][${level}] ${msg}`);
+  if (_rlogs.length > 300) _rlogs.shift();
+}
+{ // 只覆盖 error/warn，不干扰 log（避免死循环）
+  const _oe = console.error, _ow = console.warn;
+  console.error = (...a) => { _oe(...a); _rlog('ERROR', a.map(String).join(' ')); };
+  console.warn  = (...a) => { _ow(...a); _rlog('WARN',  a.map(String).join(' ')); };
+}
+
+// ---------------------------------------------------------------------------
 // i18n：data-i18n / data-i18n-title / data-i18n-ph 属性驱动 DOM 文字替换
 // 外部语言包（JSON）通过 loadExternalLang() 合并到 S，再重新 applyI18n()
 // ---------------------------------------------------------------------------
@@ -126,9 +141,16 @@ async function init() {
   bindEvents();
   window.api.onTasksUpdate((list) => { tasks = list; render(); });
   window.api.onWarnings((msgs) => showWarnings(msgs));
+  window.api.onTaskError(({ name, code, stderr }) => {
+    const msg = stderr ? stderr.slice(0, 200) : `退出码 ${code}`;
+    _rlog('ERROR', `任务失败 [${name}] code=${code}: ${stderr || '(无详细信息)'}`);
+    showWarnings([`转写失败（退出码 ${code}）：${msg}。点"🛠 查看日志"查看详情。`]);
+  });
 
   // 模型下载进度/完成（全局注册一次）
+  const _dlLines = [];   // 本次下载的所有输出行，用于日志面板
   window.api.onDownloadProgress(({ type, line }) => {
+    if (line) { _dlLines.push(line); _rlog('DL', `[${type}] ${line}`); }
     const btn = type === 'whisper' ? $('#btn-dl-whisper') : $('#btn-dl-demucs');
     if (btn) btn.textContent = line.length > 20 ? line.slice(0, 20) + '…' : line;
   });
@@ -136,12 +158,16 @@ async function init() {
     const btn = type === 'whisper' ? $('#btn-dl-whisper') : $('#btn-dl-demucs');
     if (code === 0) {
       if (btn) { btn.textContent = S.downloaded; btn.disabled = false; }
+      _rlog('INFO', `[${type}] 下载完成`);
       if (type === 'whisper') refreshWhisperModelStatus();
       else refreshDemucsModelStatus();
     } else {
       if (btn) { btn.textContent = S.btn_dl; btn.disabled = false; }
+      const errMsg = error || (_dlLines.slice(-5).join(' | ')) || '未知错误';
+      _rlog('ERROR', `[${type}] 下载失败 code=${code} ${errMsg}`);
       showWarnings([S.download_fail(error)]);
     }
+    _dlLines.length = 0;
   });
 
   window.api.refreshTasks();
@@ -254,6 +280,16 @@ function bindEvents() {
   document.addEventListener('click', (e) => {
     if (e.target.id === 'btn-env-refresh') { refreshEnvStatus(); }
     if (e.target.id === 'btn-export-template') window.api.exportLangTemplate();
+    if (e.target.id === 'btn-devtools') showLogsPanel();
+    // Whisper/Demucs 模型行的"↺ 检测"按钮：带反馈的自动检测
+    if (e.target.id === 'btn-detect-whisper' || e.target.id === 'btn-detect-demucs') {
+      const btn = e.target;
+      const orig = btn.textContent;
+      btn.textContent = '检测中…'; btn.disabled = true;
+      autoDetectModelDirs()
+        .then(() => { btn.textContent = '✓ 完成'; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500); })
+        .catch(() => { btn.textContent = '✗ 失败'; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000); });
+    }
   });
 
   // 语言文件区：拖入 + 点击选文件（只在 lang-drop-zone 范围内响应，不触发全局遮罩）
@@ -622,12 +658,8 @@ function openConfirm(files) {
     renderSingleConfirm();
   } else {
     renderConfirmRows();
-    // 初始同步统一格式：全部相同就显示该值，否则显示"不统一"
-    const uf = $('#unified-format');
-    if (uf) {
-      const unique = [...new Set(pendingFormats)];
-      uf.value = unique.length === 1 ? unique[0] : '';
-    }
+    // 初始同步统一格式：全部相同就设值，否则插入只读"格式不统一"提示项
+    syncUnifiedFormat();
   }
   $('#confirm-modal').classList.remove('hidden');
 }
@@ -636,7 +668,7 @@ function renderSingleConfirm() {
   const f = pendingFiles[0];
   const name = f.replace(/^.*[\\/]/, '');
   const def = config.defaultOutputFormat || 'md';
-  const fmtOpts = Object.entries(FMT_LABELS).map(([v, l]) =>
+  const fmtOpts = Object.entries(FMT_LABELS()).map(([v, l]) =>
     `<option value="${v}"${v===def?' selected':''}>${l}</option>`).join('');
   const el = $('#confirm-single-only');
   if (!el) return;
@@ -693,6 +725,8 @@ function updateMusicHint() {
 }
 
 const FMT_LABELS = () => ({ md: S.fmt_md, txt: S.fmt_txt, srt: S.fmt_srt, vtt: S.fmt_vtt });
+// 批量行每格空间小：只显示后缀名
+const FMT_SHORT = () => ({ md: '.md', txt: '.txt', srt: '.srt', vtt: '.vtt' });
 
 function renderConfirmRows() {
   const wrap = $('#confirm-file-rows');
@@ -703,7 +737,7 @@ function renderConfirmRows() {
     const dirCls = dir ? 'file-row-dir custom' : 'file-row-dir';
     const fmt = pendingFormats[i] || config.defaultOutputFormat || 'md';
     const hasMusic = pendingMusics[i];
-    const fmtOpts = Object.entries(FMT_LABELS).map(([v,l]) =>
+    const fmtOpts = Object.entries(FMT_SHORT()).map(([v,l]) =>
       `<option value="${v}"${v===fmt?' selected':''}>${l}</option>`).join('');
     return `<div class="file-row" data-idx="${i}">
       <button class="music-dot${hasMusic?' active':''}" data-music-idx="${i}" title="${hasMusic?'有背景音乐，需分离（点击取消）':'无背景音乐（点击标记需分离）'}"></button>
@@ -728,11 +762,29 @@ function renderConfirmRows() {
   wrap.querySelectorAll('[data-fmt-idx]').forEach(sel =>
     sel.onchange = () => {
       pendingFormats[Number(sel.dataset.fmtIdx)] = sel.value;
-      // 自动更新统一格式：全部相同→设为该值，否则→"不统一"
-      const unique = [...new Set(pendingFormats)];
-      const uf = $('#unified-format');
-      if (uf) uf.value = unique.length === 1 ? unique[0] : '';
+      syncUnifiedFormat();
     });
+}
+
+function syncUnifiedFormat() {
+  const uf = $('#unified-format');
+  if (!uf) return;
+  const unique = [...new Set(pendingFormats)];
+  // 移除之前插入的只读项（如果有）
+  const existing = uf.querySelector('option[data-mixed]');
+  if (existing) existing.remove();
+  if (unique.length === 1) {
+    uf.value = unique[0];
+  } else {
+    // 格式不统一：插入只读提示项并选中，用户无法主动选择
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = S.fmt_no_unify_auto || '格式不统一';
+    opt.dataset.mixed = '1';
+    opt.disabled = false;  // 允许显示但实际上只读（通过 change 事件过滤）
+    uf.insertBefore(opt, uf.firstChild);
+    uf.value = '';
+  }
 }
 
 function applyUnifiedMusic(hasMusic) {
@@ -744,6 +796,7 @@ function applyUnifiedFormat(fmt) {
   if (!fmt) return;
   pendingFormats = pendingFormats.map(() => fmt);
   renderConfirmRows();
+  syncUnifiedFormat();   // 清掉"格式不统一"只读项（如有），确保选的值生效
 }
 
 async function pickUnifiedDir() {
@@ -837,9 +890,9 @@ function openSettings() {
   $('#set-theme').value = config.theme || 'dark';
   $('#set-accent').value = config.accent || '#5b5bfa';
   updatePythonStatus();
-  refreshModelStatus();
   $('#settings-modal').classList.remove('hidden');
-  refreshAllModelDropdowns();  // 异步，不阻塞弹窗显示
+  // 自动检测模型目录并回填 → 再刷新下拉（顺序执行，路径先到位）
+  autoDetectModelDirs().catch(() => refreshModelStatus());
   // 环境检测：只在未完成时自动跑；已完成则仅显示缓存状态，不重复检测
   if (!config.envComplete) refreshEnvStatus();
   else renderEnvComplete();
@@ -1096,6 +1149,26 @@ async function refreshModelStatus() {
   else { wTag.textContent = S.model_not_detected; wTag.className = 'status-tag miss'; }
   if (det.demucsCacheDir) { dTag.textContent = S.model_detected; dTag.className = 'status-tag ok'; }
   else { dTag.textContent = S.model_not_detected_dl; dTag.className = 'status-tag miss'; }
+}
+
+// 自动检测模型目录：扫描常见路径，找到就回填输入框，然后刷新下拉和状态
+async function autoDetectModelDirs() {
+  const wInput = $('#set-whisper');
+  const dInput = $('#set-demucs');
+  const hintW = wInput?.value || '';
+  const hintD = dInput?.value || '';
+
+  // 主检测：扫常见路径 + HF 环境变量 + 当前输入框路径
+  const det = await window.api.detectModels(hintW, hintD);
+
+  // 找到就回填；没找到保留原值（原值可能就是正确的，只是不在标准路径）
+  if (det.whisperDir && wInput) wInput.value = det.whisperDir;
+  if (det.demucsCacheDir && dInput) dInput.value = det.demucsCacheDir;
+
+  // 更新状态标签 + 刷新下拉（用最终路径检查模型是否已下载）
+  await refreshModelStatus();
+  await refreshAllModelDropdowns();
+  await refreshDemucsModelStatus();
 }
 
 async function saveSettings() {
@@ -1489,6 +1562,60 @@ function triggerUFOEaster() {
     pool.style.animation   = 'none'; pool.style.opacity   = '0';
     if (window.__beam) window.__beam.normal();
   }, 7200);
+}
+
+// ── 应用日志面板（简洁文本，重点标红 ERROR/WARN）────────────────────────────
+async function showLogsPanel() {
+  const mainLogs = await window.api.getLogs().catch(() => '');
+  const sep = '─'.repeat(60);
+  // 合并渲染端（下载错误 + console.error）和主进程日志，按时间排序
+  const all = [
+    ..._rlogs,
+    ...(mainLogs ? mainLogs.split('\n').filter(Boolean) : []),
+  ].sort();
+  const logs = all.length ? all.join('\n') : '（暂无日志）';
+  // 复用现有 modal 样式，动态创建一次性面板
+  const mask = document.createElement('div');
+  mask.className = 'modal-mask';
+  mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center';
+  mask.innerHTML = `
+    <div class="modal wide" style="max-height:80vh;display:flex;flex-direction:column;width:700px">
+      <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between">
+        应用日志
+        <div style="display:flex;gap:8px">
+          <button class="btn ghost tiny" id="_log-copy">📋 复制</button>
+          <button class="btn ghost tiny" id="_log-close">✕ 关闭</button>
+        </div>
+      </div>
+      <pre id="_log-body" style="flex:1;overflow-y:auto;background:var(--bg-card);padding:12px;border-radius:6px;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-all;margin:0"></pre>
+    </div>`;
+  document.body.appendChild(mask);
+
+  const pre = mask.querySelector('#_log-body');
+  // 标红 ERROR/WARN，普通行正常色
+  // 会话分隔线（app 启动时间）
+  const sessionTs = new Date().toLocaleString('zh-CN');
+  const header = `${'─'.repeat(20)} 本次会话 ${sessionTs} ${'─'.repeat(20)}`;
+  const fullText = header + '\n' + logs;
+  pre.innerHTML = fullText.split('\n').map(line => {
+    if (line.startsWith('─'))              return `<span style="color:var(--text-dim)">${escapeHtml(line)}</span>`;
+    if (/\[ERROR\]/.test(line))            return `<span style="color:var(--danger)">${escapeHtml(line)}</span>`;
+    if (/\[WARN\]/.test(line))             return `<span style="color:var(--warning)">${escapeHtml(line)}</span>`;
+    if (/\[DL\]/.test(line))               return `<span style="color:#88c8ff">${escapeHtml(line)}</span>`;
+    return escapeHtml(line);
+  }).join('\n');
+  pre.scrollTop = pre.scrollHeight;
+
+  mask.querySelector('#_log-close').onclick = () => mask.remove();
+  mask.querySelector('#_log-copy').onclick = async (e) => {
+    await navigator.clipboard.writeText(logs);
+    const btn = e.target;
+    const orig = btn.textContent;
+    btn.textContent = '✓ 已复制';
+    btn.style.color = 'var(--success)';
+    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 2000);
+  };
+  mask.addEventListener('click', e => { if (e.target === mask) mask.remove(); });
 }
 
 function hexToHsl(hex) {

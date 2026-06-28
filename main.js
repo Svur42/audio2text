@@ -52,7 +52,8 @@ function embeddedPythonEnv() {
 // 确保内嵌 Python 有 pip（首次自举）
 async function ensureEmbeddedPip(pyPath) {
   const pipCheck = () => {
-    try { execFileSync(pyPath, ['-m', 'pip', '--version'], { timeout: 8000 }); return true; }
+    try { execFileSync(pyPath, ['-m', 'pip', '--version'],
+      { timeout: 8000, stdio: 'pipe', windowsHide: true }); return true; }
     catch (e) { return false; }
   };
   if (pipCheck()) return;
@@ -67,7 +68,8 @@ async function ensureEmbeddedPip(pyPath) {
       file.on('finish', () => { file.close(); resolve(); });
     }).on('error', reject);
   });
-  execFileSync(pyPath, [getPipPath, '--no-warn-script-location'], { timeout: 60000, stdio: 'inherit' });
+  execFileSync(pyPath, [getPipPath, '--no-warn-script-location'],
+    { timeout: 60000, stdio: 'pipe', windowsHide: true });
   try { fs.unlinkSync(getPipPath); } catch (e) {}
 }
 
@@ -155,12 +157,13 @@ function saveConfig(cfg) {
 // 模型自动检测
 // ---------------------------------------------------------------------------
 function dirHasWhisperModel(root) {
-  // 找 root 下匹配 models--*faster-whisper-large-v3-turbo 且 snapshots/*/model.bin 存在
+  // 扫描 root 下所有 models--*faster-whisper* 目录，任意一个含 model.bin 即返回 true
+  // 注意：用户可能装了 medium / small / large-v3 等任意型号，不能只检测 turbo
   try {
     const entries = fs.readdirSync(root, { withFileTypes: true });
     for (const e of entries) {
       if (!e.isDirectory()) continue;
-      if (!/models--.*faster-whisper-large-v3-turbo/.test(e.name)) continue;
+      if (!/models--.*faster.whisper/i.test(e.name)) continue;   // 匹配所有型号
       const snapRoot = path.join(root, e.name, 'snapshots');
       if (!fs.existsSync(snapRoot)) continue;
       for (const snap of fs.readdirSync(snapRoot)) {
@@ -171,14 +174,37 @@ function dirHasWhisperModel(root) {
   return false;
 }
 
-function detectModels() {
+function detectModels(hintWhisper = '', hintDemucs = '') {
   const result = { whisperDir: null, demucsCacheDir: null };
 
-  // Whisper：候选根目录（常见安装位置）
+  // Whisper：精准候选路径（无全盘扫描，毫秒级检测）
+  // 优先级：UI当前值 → 环境变量 → config保存值 → HF标准路径 → 常见自定义位置
+  const cfg = loadConfig();
+  const hfHome   = process.env.HF_HOME;
+  const hfCache  = process.env.HF_HUB_CACHE || process.env.HUGGING_FACE_HUB_CACHE;
+  const sep = path.sep;
+
   const whisperCandidates = [
+    // 1. UI 输入框当前值（用户自己填的路径）
+    ...(hintWhisper ? [hintWhisper] : []),
+    // 2. HuggingFace 官方环境变量（HF 工具链用户几乎都会有）
+    ...(hfCache ? [hfCache] : []),
+    ...(hfHome  ? [path.join(hfHome, 'hub')] : []),
+    // 3. 当前 config 保存值（app 内下载过的用户）
+    ...(cfg.whisperDir ? [cfg.whisperDir] : []),
+    // 4. HuggingFace 默认缓存（跨平台标准位置）
     path.join(os.homedir(), '.cache', 'huggingface', 'hub'),
+    path.join(process.env.LOCALAPPDATA || '', 'huggingface', 'hub'),
+    // 5. 常见自定义位置（中文 Windows 用户常见数据组织方式，精准 8 个，无需全盘）
+    `D:${sep}数据${sep}AI${sep}whisper-models`,
+    `D:${sep}AI${sep}whisper-models`,
+    `D:${sep}whisper-models`,
+    `E:${sep}AI${sep}whisper-models`,
+    `E:${sep}whisper-models`,
     path.join(os.homedir(), 'whisper-models'),
-  ];
+    path.join(os.homedir(), 'AI', 'whisper-models'),
+    path.join(os.homedir(), 'models', 'whisper'),
+  ].filter(Boolean);
   for (const c of whisperCandidates) {
     if (dirHasWhisperModel(c)) { result.whisperDir = c; break; }
   }
@@ -406,7 +432,8 @@ function buildArgs(t, cfg) {
   if (cfg.whisperModel) args.push('--model-name', cfg.whisperModel);
   if (cfg.demucsModel) args.push('--demucs-model', cfg.demucsModel);
   if (cfg.ffmpegDir) args.push('--ffmpeg-dir', cfg.ffmpegDir);
-  if (t.outputFormat && t.outputFormat !== 'txt') args.push('--output-format', t.outputFormat);
+  // 始终显式传格式（pipeline.py 默认是 md，但明确传入更安全）
+  if (t.outputFormat) args.push('--output-format', t.outputFormat);
   return args;
 }
 
@@ -417,6 +444,7 @@ function startProcess(t, cfg, isRetry) {
   const runEnv = {
     ...(isBundledPy ? embeddedPythonEnv() : process.env),
     PYTHONIOENCODING: 'utf-8',
+    PYTHONUTF8: '1',   // 强制 Python 用 UTF-8 处理 sys.argv，防止中文路径乱码
   };
   const child = spawn(cfg.pythonPath, ['-u', ...args], {
     env: runEnv,
@@ -513,8 +541,10 @@ function startProcess(t, cfg, isRetry) {
   };
 
   child.stdout.on('data', drain);
+  let stderrBuf = '';   // 收集完整 stderr 供诊断和日志
   child.stderr.on('data', (chunk) => {
     const s = chunk.toString('utf8');
+    stderrBuf += s;
     if (/CUDA out of memory|OutOfMemoryError/.test(s)) sawOOM = true;
   });
 
@@ -557,8 +587,12 @@ function startProcess(t, cfg, isRetry) {
       return;
     } else {
       t.status = 'error';
+      const errDetail = stderrBuf.trim().split('\n').slice(-8).join(' | ').slice(0, 300);
       t.step = sawOOM ? S.step_oom_fail : S.step_fail(code);
       runningId = null;
+      // 把详细错误推给渲染端日志系统
+      console.error(`[task:${t.id}] 退出码=${code} stderr: ${errDetail || '(无 stderr)'}`);
+      safeSend('task:error-log', { id: t.id, name: t.name, code, stderr: errDetail });
     }
     cleanupTemp();
     pushTaskState();
@@ -647,7 +681,7 @@ ipcMain.handle('config:save', (_e, cfg) => {
   return saveConfig(merged);
 });
 
-ipcMain.handle('config:detectModels', () => detectModels());
+ipcMain.handle('config:detectModels', (_, hintW, hintD) => detectModels(hintW || '', hintD || ''));
 
 // 某 Whisper 模型是否已下载
 ipcMain.handle('model:whisperStatus', (_e, { whisperDir, modelName }) =>
@@ -830,6 +864,22 @@ ipcMain.on('env:install', (event, { pkg, variant }) => {
   };
   runStep();
 });
+
+// ─── 应用日志（最近 200 条，供用户排查问题）───────────────────────────────
+const appLogs = [];
+function appendLog(level, msg) {
+  const ts = new Date().toISOString().slice(11, 23);
+  appLogs.push(`[${ts}] [${level}] ${msg}`);
+  if (appLogs.length > 200) appLogs.shift();
+}
+// 接管 console 输出，同时写入 appLogs
+const _origLog = console.log, _origWarn = console.warn, _origErr = console.error;
+console.log  = (...a) => { _origLog(...a);  appendLog('INFO', a.join(' ')); };
+console.warn = (...a) => { _origWarn(...a); appendLog('WARN', a.join(' ')); };
+console.error= (...a) => { _origErr(...a);  appendLog('ERROR',a.join(' ')); };
+
+ipcMain.handle('dev:get-logs', () => appLogs.join('\n') || '（暂无日志）');
+ipcMain.on('dev:open-tools', () => { mainWin?.webContents.openDevTools(); });
 
 // ─── 语言包 ─────────────────────────────────────────────────────────────────
 // 自定义语言文件存储在 userData/locales/，打包后持久存在，无需 exe 旁边额外文件夹

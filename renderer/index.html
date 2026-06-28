@@ -128,7 +128,7 @@
               <span class="field-sub" data-i18n="confirm_fmt_sub">设置后覆盖每行的单独选择</span></label>
             <div class="fmt-row">
               <select id="unified-format" class="select">
-                <option value="" data-i18n="fmt_no_unify">不统一（各自选择）</option>
+                <!-- value="" 是只读状态（自动检测到格式不统一时显示），用户不可主动选 -->
                 <option value="md" data-i18n="fmt_md_all">全部 Markdown (.md)</option>
                 <option value="txt" data-i18n="fmt_txt_all">全部 纯文本 (.txt)</option>
                 <option value="srt" data-i18n="fmt_srt_all">全部 SRT 字幕（视频剪辑/字幕制作）</option>
@@ -189,6 +189,7 @@
             <span class="model-active-icon" id="whisper-active-icon"></span>
             <select id="set-whisper-model" class="select"></select>
             <span id="whisper-model-status" class="status-tag"></span>
+            <button class="btn ghost tiny" id="btn-detect-whisper" title="重新检测模型目录和下载状态">↺ 检测</button>
             <button class="btn ghost tiny hidden" id="btn-dl-whisper" data-i18n="btn_dl">⬇ 下载</button>
           </div>
         </div>
@@ -198,6 +199,7 @@
             <span class="model-active-icon" id="demucs-active-icon"></span>
             <select id="set-demucs-model" class="select"></select>
             <span id="demucs-model-status" class="status-tag"></span>
+            <button class="btn ghost tiny" id="btn-detect-demucs" title="重新检测模型目录和下载状态">↺ 检测</button>
             <button class="btn ghost tiny hidden" id="btn-dl-demucs" data-i18n="btn_dl">⬇ 下载</button>
           </div>
         </div>
@@ -270,6 +272,7 @@
         </div>
       </div>
       <div class="modal-foot">
+        <button class="btn ghost tiny" id="btn-devtools" title="查看控制台日志（报错排查用）" style="margin-right:auto">🛠 查看日志</button>
         <button class="btn ghost" id="settings-close" data-i18n="btn_settings_close">关闭</button>
         <button class="btn primary" id="settings-save" data-i18n="btn_settings_save">保存</button>
       </div>

@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('api', {
   // 配置
   getConfig: () => ipcRenderer.invoke('config:get'),
   saveConfig: (cfg) => ipcRenderer.invoke('config:save', cfg),
-  detectModels: () => ipcRenderer.invoke('config:detectModels'),
+  detectModels: (hintW, hintD) => ipcRenderer.invoke('config:detectModels', hintW, hintD),
 
   // 对话框
   pickDir: () => ipcRenderer.invoke('dialog:pickDir'),
@@ -49,6 +49,11 @@ contextBridge.exposeInMainWorld('api', {
   // 事件监听
   onTasksUpdate: (cb) => ipcRenderer.on('tasks:update', (_e, list) => cb(list)),
   onWarnings: (cb) => ipcRenderer.on('app:warnings', (_e, msgs) => cb(msgs)),
+  onTaskError: (cb) => ipcRenderer.on('task:error-log', (_e, d) => cb(d)),
+
+  // 调试
+  getLogs: () => ipcRenderer.invoke('dev:get-logs'),
+  openDevTools: () => ipcRenderer.send('dev:open-tools'),
 
   // 语言包
   listLangs: () => ipcRenderer.invoke('lang:list'),
