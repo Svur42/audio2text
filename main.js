@@ -883,29 +883,31 @@ elog.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}';
 elog.transports.file.maxSize = 10 * 1024 * 1024;   // 单文件 10MB 上限
 elog.transports.console.level = false;             // 我们自己接管 console，禁止重复打印
 
-// 内存缓冲（供快速读取 / dev:get-logs 兜底）
+// 内存缓冲（供快速读取 / dev:get-logs 兜底）—— INFO 等普通日志只进内存，不落盘
 const appLogs = [];
+// 惰性会话分隔线：仅在本次会话首次有「需落盘」的日志时才写，避免无报错也建文件
+let sessionSepWritten = false;
+function ensureSessionSeparator() {
+  if (sessionSepWritten) return;
+  sessionSepWritten = true;
+  elog.info(`========== 新会话启动 ${new Date().toLocaleString('zh-CN')} (v${app.getVersion()}) ==========`);
+}
 function appendLog(level, msg) {
   const ts = new Date().toISOString().slice(11, 23);
   appLogs.push(`[${ts}] [${level}] ${msg}`);
   if (appLogs.length > 500) appLogs.shift();
-  // 落盘：DL（下载）等自定义级别归到 info，但保留文本前缀供着色
+  // 只有 ERROR / WARN 才落盘（= 出问题时才建当天文件）；INFO/DL 只留内存
   const lv = String(level).toLowerCase();
-  if (['error', 'warn', 'info'].includes(lv)) elog[lv](msg);
-  else elog.info(`[${level}] ${msg}`);
+  if (lv === 'error' || lv === 'warn') {
+    ensureSessionSeparator();   // 落盘前先补一次会话分隔线（惰性，文件此刻才被创建）
+    elog[lv](msg);
+  }
 }
 // 接管 console 输出，同时写入日志
 const _origLog = console.log, _origWarn = console.warn, _origErr = console.error;
 console.log  = (...a) => { _origLog(...a);  appendLog('INFO', a.join(' ')); };
 console.warn = (...a) => { _origWarn(...a); appendLog('WARN', a.join(' ')); };
 console.error= (...a) => { _origErr(...a);  appendLog('ERROR',a.join(' ')); };
-
-// 启动时写入会话分隔线，方便区分不同次运行
-try {
-  fs.mkdirSync(logsDir(), { recursive: true });
-  const sep = `========== 新会话启动 ${new Date().toLocaleString('zh-CN')} (v${app.getVersion()}) ==========`;
-  fs.appendFileSync(path.join(logsDir(), `${todayStr()}.log`), `\n${sep}\n`);
-} catch (_) {}
 
 ipcMain.handle('dev:get-logs', () => appLogs.join('\n') || '（暂无日志）');
 ipcMain.on('dev:open-tools', () => { mainWin?.webContents.openDevTools(); });

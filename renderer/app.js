@@ -1670,10 +1670,11 @@ async function showLogsPanel() {
     boxes.forEach(b => b.checked = !allOn);
   };
   logsView.querySelector('#_log-copy').onclick = async (e) => {
+    // 必须在 await 之前捕获按钮：await 之后事件派发结束，e.currentTarget 会变 null
+    const btn = e.currentTarget, orig = btn.innerHTML;
     let txt = checkedText();
     if (!txt) txt = blocks.filter(b => !b.sep).map(b => b.text).join('\n\n');  // 没勾选就复制全部
     await navigator.clipboard.writeText(txt);
-    const btn = e.currentTarget, orig = btn.innerHTML;
     btn.innerHTML = '✓ ' + (S.copied || '已复制');
     btn.style.color = 'var(--success)';
     setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
