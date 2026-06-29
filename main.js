@@ -252,8 +252,10 @@ function isDemucsModelDownloaded(demucsDir, modelName) {
 // 启动自检：python / pipeline.py / ffprobe
 // ---------------------------------------------------------------------------
 function resolvePipeline(cfg) {
-  return cfg.pipelinePath && cfg.pipelinePath.trim()
-    ? cfg.pipelinePath : bundledPipelinePath();
+  // 自定义路径仅在文件真实存在时采用，否则回退内置（避免旧的"幽灵路径"导致失败）
+  const custom = cfg.pipelinePath && cfg.pipelinePath.trim();
+  if (custom && fs.existsSync(custom)) return custom;
+  return bundledPipelinePath();
 }
 
 function selfCheck(cfg) {
@@ -587,11 +589,18 @@ function startProcess(t, cfg, isRetry) {
       return;
     } else {
       t.status = 'error';
-      const errDetail = stderrBuf.trim().split('\n').slice(-8).join(' | ').slice(0, 300);
+      const errFull = stderrBuf.trim() || '(无 stderr 输出)';
+      const errDetail = errFull.split('\n').slice(-8).join(' | ').slice(0, 300);
       t.step = sawOOM ? S.step_oom_fail : S.step_fail(code);
       runningId = null;
-      // 把详细错误推给渲染端日志系统
-      console.error(`[task:${t.id}] 退出码=${code} stderr: ${errDetail || '(无 stderr)'}`);
+      // 写成一个完整多行错误块（便于在日志面板整段勾选复制）
+      console.error([
+        `❌ 任务失败：${t.name}`,
+        `   退出码：${code}`,
+        `   命令：${cfg.pythonPath} -u ${args.join(' ')}`,
+        `   错误输出：`,
+        ...errFull.split('\n').map(l => '     ' + l),
+      ].join('\n'));
       safeSend('task:error-log', { id: t.id, name: t.name, code, stderr: errDetail });
     }
     cleanupTemp();
@@ -865,21 +874,104 @@ ipcMain.on('env:install', (event, { pkg, variant }) => {
   runStep();
 });
 
-// ─── 应用日志（最近 200 条，供用户排查问题）───────────────────────────────
+// ─── 应用日志（electron-log 持久化，按日期分文件）─────────────────────────
+const elog = require('electron-log/main');
+function logsDir() { return path.join(app.getPath('userData'), 'logs'); }
+function todayStr() { return new Date().toISOString().slice(0, 10); }   // YYYY-MM-DD
+elog.transports.file.resolvePathFn = () => path.join(logsDir(), `${todayStr()}.log`);
+elog.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}';
+elog.transports.file.maxSize = 10 * 1024 * 1024;   // 单文件 10MB 上限
+elog.transports.console.level = false;             // 我们自己接管 console，禁止重复打印
+
+// 内存缓冲（供快速读取 / dev:get-logs 兜底）
 const appLogs = [];
 function appendLog(level, msg) {
   const ts = new Date().toISOString().slice(11, 23);
   appLogs.push(`[${ts}] [${level}] ${msg}`);
-  if (appLogs.length > 200) appLogs.shift();
+  if (appLogs.length > 500) appLogs.shift();
+  // 落盘：DL（下载）等自定义级别归到 info，但保留文本前缀供着色
+  const lv = String(level).toLowerCase();
+  if (['error', 'warn', 'info'].includes(lv)) elog[lv](msg);
+  else elog.info(`[${level}] ${msg}`);
 }
-// 接管 console 输出，同时写入 appLogs
+// 接管 console 输出，同时写入日志
 const _origLog = console.log, _origWarn = console.warn, _origErr = console.error;
 console.log  = (...a) => { _origLog(...a);  appendLog('INFO', a.join(' ')); };
 console.warn = (...a) => { _origWarn(...a); appendLog('WARN', a.join(' ')); };
 console.error= (...a) => { _origErr(...a);  appendLog('ERROR',a.join(' ')); };
 
+// 启动时写入会话分隔线，方便区分不同次运行
+try {
+  fs.mkdirSync(logsDir(), { recursive: true });
+  const sep = `========== 新会话启动 ${new Date().toLocaleString('zh-CN')} (v${app.getVersion()}) ==========`;
+  fs.appendFileSync(path.join(logsDir(), `${todayStr()}.log`), `\n${sep}\n`);
+} catch (_) {}
+
 ipcMain.handle('dev:get-logs', () => appLogs.join('\n') || '（暂无日志）');
 ipcMain.on('dev:open-tools', () => { mainWin?.webContents.openDevTools(); });
+
+// 渲染进程日志转发到同一份文件（统一来源）
+ipcMain.on('logs:append', (_e, { level, msg }) => appendLog(level || 'INFO', String(msg || '')));
+
+// 列出可用日期（降序，最新在前）
+ipcMain.handle('logs:list-dates', () => {
+  try {
+    return fs.readdirSync(logsDir())
+      .filter(f => /^\d{4}-\d{2}-\d{2}\.log$/.test(f))
+      .map(f => f.replace(/\.log$/, ''))
+      .sort().reverse();
+  } catch (_) { return []; }
+});
+
+// 读取某一天的日志内容
+ipcMain.handle('logs:read', (_e, date) => {
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayStr();
+  try { return fs.readFileSync(path.join(logsDir(), `${d}.log`), 'utf8'); }
+  catch (_) { return ''; }
+});
+
+// 清空日志：传具体日期删该天，传 'all' 删全部
+ipcMain.handle('logs:clear', (_e, date) => {
+  try {
+    if (date === 'all') {
+      for (const f of fs.readdirSync(logsDir())) {
+        if (/^\d{4}-\d{2}-\d{2}\.log$/.test(f)) fs.unlinkSync(path.join(logsDir(), f));
+      }
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      fs.unlinkSync(path.join(logsDir(), `${date}.log`));
+    }
+    appLogs.length = 0;
+    return true;
+  } catch (_) { return false; }
+});
+
+ipcMain.on('logs:open-folder', () => { try { shell.openPath(logsDir()); } catch (_) {} });
+
+// ─── 应用维护：是否打包版 / 卸载 ────────────────────────────────────────────
+ipcMain.handle('app:isPackaged', () => app.isPackaged);
+
+ipcMain.on('app:uninstall', () => {
+  try {
+    // NSIS 卸载程序位于安装目录（与主 exe 同级），名为 "Uninstall <productName>.exe"
+    const installDir = path.dirname(app.getPath('exe'));
+    let uninstaller = null;
+    try {
+      const f = fs.readdirSync(installDir).find(n => /^Uninstall .*\.exe$/i.test(n));
+      if (f) uninstaller = path.join(installDir, f);
+    } catch (_) {}
+    if (!uninstaller || !fs.existsSync(uninstaller)) {
+      console.error('[uninstall] 未找到卸载程序于', installDir);
+      shell.openPath(installDir);   // 兜底：打开安装目录让用户手动卸载
+      return;
+    }
+    // 分离进程启动卸载器（/currentuser = per-user 安装），随后退出本应用以释放文件占用
+    const child = spawn(uninstaller, ['/currentuser'], { detached: true, stdio: 'ignore' });
+    child.unref();
+    setTimeout(() => app.quit(), 500);
+  } catch (e) {
+    console.error('[uninstall] 启动卸载失败:', e.message);
+  }
+});
 
 // ─── 语言包 ─────────────────────────────────────────────────────────────────
 // 自定义语言文件存储在 userData/locales/，打包后持久存在，无需 exe 旁边额外文件夹

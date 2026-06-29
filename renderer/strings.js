@@ -233,6 +233,24 @@ const S = {
   step_complete:       '完成',
   env_install_no_python: '未找到 Python，请先在设置里指定 Python 路径',
   env_install_fail:    (label, code) => `安装 ${label} 失败（退出码 ${code}）`,
+
+  /* ── 日志面板 ── */
+  logsTitle:           '应用日志',
+  logsDate:            '日期',
+  logsCopy:            '复制',
+  copy:                '复制',
+  copied:              '已复制',
+  close:               '关闭',
+  logsClear:           '清空此日',
+  logsClearConfirm:    '确定清空该日志？',
+  logsOpenFolder:      '打开日志文件夹',
+  logsNoDate:          '（无日志）',
+  logsEmpty:           '（暂无日志）',
+  logsSelectAll:       '全选 / 全不选',
+  logsCopySel:         '复制选中',
+  logsHint:            '勾选要复制的错误段，点"复制"。不勾选则复制全部。',
+  btn_uninstall:       '🗑 卸载软件',
+  uninstallConfirm:    '确定要卸载 Audio2Text 吗？将关闭应用并启动卸载程序。',
 };
 
 /* 双上下文兼容 */

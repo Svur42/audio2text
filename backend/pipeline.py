@@ -140,13 +140,20 @@ def has_whisper_model(model_dir, model_name):
 
 def transcribe(audio_path, stem, out_dir, model_dir, model_name, device, output_format="txt"):
     from faster_whisper import WhisperModel
-    if has_whisper_model(model_dir, model_name):
+    local_present = has_whisper_model(model_dir, model_name)
+    if local_present:
         p("Whisper 模型已就绪，正在加载...")
+        # 本地已有模型：强制离线，避免联网校验在弱网/被墙环境长时间卡顿
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
     else:
-        p(f"首次使用模型 {model_name}，正在下载...")
+        p(f"⚠ 本地未找到模型 {model_name}（目录：{model_dir}）。")
+        p("  将尝试联网下载；若无网络会在约 10 秒后失败——建议先在设置里下载模型，或指定正确的模型目录。")
+        # 缩短 HuggingFace 连接/下载超时，避免无网络时干等几十分钟
+        os.environ.setdefault("HF_HUB_ETAG_TIMEOUT", "10")
+        os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "10")
     compute_type = "float16" if device == "cuda" else "int8"
     model = WhisperModel(model_name, device=device, compute_type=compute_type,
-                         download_root=str(model_dir))
+                         download_root=str(model_dir), local_files_only=local_present)
     p("转写中...")
     segments, info = model.transcribe(str(audio_path), beam_size=5)
 

@@ -148,6 +148,7 @@
   <!-- 设置弹窗 -->
   <div id="settings-modal" class="modal-mask hidden">
     <div class="modal wide">
+     <div id="settings-view">
       <div class="modal-title" data-i18n="settings_title">设置</div>
       <div class="modal-body">
 
@@ -273,9 +274,35 @@
       </div>
       <div class="modal-foot">
         <button class="btn ghost tiny" id="btn-devtools" title="查看控制台日志（报错排查用）" style="margin-right:auto">🛠 查看日志</button>
+        <button class="btn ghost tiny hidden" id="btn-uninstall" data-i18n="btn_uninstall" title="卸载本软件">🗑 卸载软件</button>
         <button class="btn ghost" id="settings-close" data-i18n="btn_settings_close">关闭</button>
         <button class="btn primary" id="settings-save" data-i18n="btn_settings_save">保存</button>
       </div>
+     </div>
+
+     <!-- 日志视图：与设置共用同一个弹窗壳，切换显示（无闪烁、尺寸/内边距一致）-->
+     <div id="logs-view" class="hidden">
+      <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span data-i18n="logsTitle">应用日志</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn ghost tiny" id="_log-folder" data-i18n-title="logsOpenFolder" title="打开日志文件夹">📁</button>
+          <button class="btn ghost tiny" id="_log-selall" data-i18n="logsSelectAll">全选 / 全不选</button>
+          <button class="btn tiny" id="_log-copy">📋 <span data-i18n="copy">复制</span></button>
+          <button class="btn ghost tiny" id="_log-clear">🗑 <span data-i18n="logsClear">清空此日</span></button>
+          <button class="btn ghost tiny" id="_log-close">✕ <span data-i18n="close">关闭</span></button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="lang-row" style="margin-bottom:8px;align-items:center">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px">
+            <span data-i18n="logsDate">日期</span>
+            <select id="_log-date" class="select" style="width:auto"></select>
+          </label>
+        </div>
+        <p class="hint" data-i18n="logsHint" style="margin-bottom:10px">勾选要复制的错误段，点"复制"。不勾选则复制全部。</p>
+        <div id="_log-body" style="background:var(--bg);padding:8px;border-radius:6px;font-size:12px;line-height:1.55"></div>
+      </div>
+     </div>
     </div>
   </div>
 

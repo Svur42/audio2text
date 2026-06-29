@@ -8,8 +8,10 @@
   "scripts": {
     "start": "electron .",
     "setup-python": "node scripts/setup-python-embed.js",
-    "prebuild": "node scripts/setup-python-embed.js",
-    "build": "electron-builder --win portable"
+    "prebuild": "node scripts/setup-python-embed.js && rm -f dist/*.nsis.7z",
+    "build": "electron-builder --win nsis",
+    "build-portable": "electron-builder --win portable",
+    "build-zip": "electron-builder --win zip"
   },
   "devDependencies": {
     "electron": "^33.0.0",
@@ -27,16 +29,36 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "backend", "to": "backend" },
-      { "from": "locales", "to": "locales" },
-      { "from": "build/python-embed", "to": "python-embed" }
+      {
+        "from": "backend",
+        "to": "backend"
+      },
+      {
+        "from": "locales",
+        "to": "locales"
+      },
+      {
+        "from": "build/python-embed",
+        "to": "python-embed"
+      }
     ],
     "win": {
-      "target": "portable",
+      "target": "nsis",
       "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Audio2Text"
     },
     "portable": {
       "unpackDirName": "Audio2Text"
     }
+  },
+  "dependencies": {
+    "electron-log": "^5.4.4"
   }
 }

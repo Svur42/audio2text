@@ -58,9 +58,9 @@
 
 ### 快速开始
 
-**1. 下载**：前往 [Releases](../../releases/latest) 下载 `Audio2Text.exe`（便携版，无需安装）
+**1. 下载**：前往 [Releases](../../releases/latest) 下载 `Audio2Text Setup x.y.z.exe`（安装版）
 
-**2. 运行**：双击 `Audio2Text.exe`，打开 **设置 → 运行环境**，应用自动检测并一键安装所需依赖（faster-whisper、demucs 等）。
+**2. 安装并运行**：双击安装包，按提示选择安装目录完成安装（免管理员权限，自动创建桌面快捷方式）；从快捷方式启动后，打开 **设置 → 运行环境**，应用自动检测并一键安装所需依赖（faster-whisper、demucs 等）。
 
 > Python 3.12 运行时已内嵌于应用，**无需单独安装 Python**。
 
@@ -111,8 +111,9 @@ UI 界面采用深色、硬边、等宽字体的构成主义视觉风格；[Motr
 ```bash
 git clone https://github.com/Svur42/audio2text.git
 cd audio2text && npm install
-npm start        # 开发模式
-npm run build    # 打包 Windows portable exe
+npm start          # 开发模式
+npm run build      # 打包 Windows 安装版（NSIS Setup.exe）
+npm run build-zip  # 打包免安装 zip（解压即用）
 ```
 
 ### License
@@ -175,9 +176,9 @@ Models are downloaded automatically from HuggingFace on first use.
 
 ### Quick Start
 
-**1. Download**: Get `Audio2Text.exe` from [Releases](../../releases/latest) (portable, no install needed)
+**1. Download**: Get `Audio2Text Setup x.y.z.exe` from [Releases](../../releases/latest) (installer)
 
-**2. Run**: Double-click `Audio2Text.exe`. Open **Settings → Environment** — the app detects missing dependencies and installs them in one click (faster-whisper, demucs, etc.).
+**2. Install & Run**: Run the installer, pick an install folder (no admin rights needed, creates a desktop shortcut). Launch from the shortcut, open **Settings → Environment** — the app detects missing dependencies and installs them in one click (faster-whisper, demucs, etc.).
 
 > Python 3.12 runtime is **bundled with the app** — no separate Python installation required.
 
@@ -228,8 +229,9 @@ UI uses a constructivist visual style — dark tones, hard edges, monospace typo
 ```bash
 git clone https://github.com/Svur42/audio2text.git
 cd audio2text && npm install
-npm start        # Development mode
-npm run build    # Build Windows portable exe
+npm start          # Development mode
+npm run build      # Build Windows installer (NSIS Setup.exe)
+npm run build-zip  # Build portable zip (unzip and run)
 ```
 
 ### License

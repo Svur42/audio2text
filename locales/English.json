@@ -197,5 +197,22 @@
   "step_canceled":       "Canceled",
   "step_complete":       "Complete",
   "env_install_no_python":"Python not found. Please set the Python path in Settings first.",
-  "env_install_fail":    "Installation failed"
+  "env_install_fail":    "Installation failed",
+
+  "logsTitle":           "Application Logs",
+  "logsDate":            "Date",
+  "logsCopy":            "Copy",
+  "copy":                "Copy",
+  "copied":              "Copied",
+  "close":               "Close",
+  "logsClear":           "Clear this day",
+  "logsClearConfirm":    "Clear this day's log?",
+  "logsOpenFolder":      "Open log folder",
+  "logsNoDate":          "(no logs)",
+  "logsEmpty":           "(no logs yet)",
+  "logsSelectAll":       "Select all / none",
+  "logsCopySel":         "Copy selected",
+  "logsHint":            "Tick the error blocks you want, then click \"Copy\". Copies all if none ticked.",
+  "btn_uninstall":       "🗑 Uninstall",
+  "uninstallConfirm":    "Uninstall Audio2Text? This will close the app and launch the uninstaller."
 }

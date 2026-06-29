@@ -51,9 +51,19 @@ contextBridge.exposeInMainWorld('api', {
   onWarnings: (cb) => ipcRenderer.on('app:warnings', (_e, msgs) => cb(msgs)),
   onTaskError: (cb) => ipcRenderer.on('task:error-log', (_e, d) => cb(d)),
 
-  // 调试
+  // 调试 / 日志
   getLogs: () => ipcRenderer.invoke('dev:get-logs'),
   openDevTools: () => ipcRenderer.send('dev:open-tools'),
+  // 持久化日志（按日期分文件）
+  listLogDates: () => ipcRenderer.invoke('logs:list-dates'),
+  readLog: (date) => ipcRenderer.invoke('logs:read', date),
+  clearLog: (date) => ipcRenderer.invoke('logs:clear', date),
+  appendLog: (level, msg) => ipcRenderer.send('logs:append', { level, msg }),
+  openLogFolder: () => ipcRenderer.send('logs:open-folder'),
+
+  // 应用维护
+  isPackaged: () => ipcRenderer.invoke('app:isPackaged'),
+  uninstallApp: () => ipcRenderer.send('app:uninstall'),
 
   // 语言包
   listLangs: () => ipcRenderer.invoke('lang:list'),

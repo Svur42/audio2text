@@ -8,6 +8,8 @@ function _rlog(level, msg) {
   const ts = new Date().toISOString().slice(11, 23);
   _rlogs.push(`[${ts}][${level}] ${msg}`);
   if (_rlogs.length > 300) _rlogs.shift();
+  // 转发到主进程，落盘到同一份按日期分文件的日志（统一来源）
+  try { window.api.appendLog(level, msg); } catch (_) {}
 }
 { // 只覆盖 error/warn，不干扰 log（避免死循环）
   const _oe = console.error, _ow = console.warn;
@@ -143,7 +145,7 @@ async function init() {
   window.api.onWarnings((msgs) => showWarnings(msgs));
   window.api.onTaskError(({ name, code, stderr }) => {
     const msg = stderr ? stderr.slice(0, 200) : `退出码 ${code}`;
-    _rlog('ERROR', `任务失败 [${name}] code=${code}: ${stderr || '(无详细信息)'}`);
+    // 主进程已写入完整错误块，这里只弹提示，避免日志重复
     showWarnings([`转写失败（退出码 ${code}）：${msg}。点"🛠 查看日志"查看详情。`]);
   });
 
@@ -277,10 +279,20 @@ function bindEvents() {
   // 设置
   $('#btn-settings').addEventListener('click', openSettings);
   $('#settings-close').addEventListener('click', () => $('#settings-modal').classList.add('hidden'));
+  // 卸载按钮：仅安装版（packaged）显示
+  window.api.isPackaged().then(packaged => {
+    if (packaged) $('#btn-uninstall')?.classList.remove('hidden');
+  }).catch(() => {});
   document.addEventListener('click', (e) => {
     if (e.target.id === 'btn-env-refresh') { refreshEnvStatus(); }
     if (e.target.id === 'btn-export-template') window.api.exportLangTemplate();
     if (e.target.id === 'btn-devtools') showLogsPanel();
+    if (e.target.id === 'btn-uninstall') {
+      const S = window.S || {};
+      if (confirm(S.uninstallConfirm || '确定要卸载 Audio2Text 吗？将关闭应用并启动卸载程序。')) {
+        window.api.uninstallApp();
+      }
+    }
     // Whisper/Demucs 模型行的"↺ 检测"按钮：带反馈的自动检测
     if (e.target.id === 'btn-detect-whisper' || e.target.id === 'btn-detect-demucs') {
       const btn = e.target;
@@ -890,6 +902,9 @@ function openSettings() {
   $('#set-theme').value = config.theme || 'dark';
   $('#set-accent').value = config.accent || '#5b5bfa';
   updatePythonStatus();
+  // 复位到设置视图（防止上次停在日志视图）
+  document.getElementById('logs-view')?.classList.add('hidden');
+  document.getElementById('settings-view')?.classList.remove('hidden');
   $('#settings-modal').classList.remove('hidden');
   // 自动检测模型目录并回填 → 再刷新下拉（顺序执行，路径先到位）
   autoDetectModelDirs().catch(() => refreshModelStatus());
@@ -1564,58 +1579,116 @@ function triggerUFOEaster() {
   }, 7200);
 }
 
-// ── 应用日志面板（简洁文本，重点标红 ERROR/WARN）────────────────────────────
+// ── 应用日志视图（与设置共用同一弹窗壳，切换显示，无闪烁）──────────────────────
 async function showLogsPanel() {
-  const mainLogs = await window.api.getLogs().catch(() => '');
-  const sep = '─'.repeat(60);
-  // 合并渲染端（下载错误 + console.error）和主进程日志，按时间排序
-  const all = [
-    ..._rlogs,
-    ...(mainLogs ? mainLogs.split('\n').filter(Boolean) : []),
-  ].sort();
-  const logs = all.length ? all.join('\n') : '（暂无日志）';
-  // 复用现有 modal 样式，动态创建一次性面板
-  const mask = document.createElement('div');
-  mask.className = 'modal-mask';
-  mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center';
-  mask.innerHTML = `
-    <div class="modal wide" style="max-height:80vh;display:flex;flex-direction:column;width:700px">
-      <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between">
-        应用日志
-        <div style="display:flex;gap:8px">
-          <button class="btn ghost tiny" id="_log-copy">📋 复制</button>
-          <button class="btn ghost tiny" id="_log-close">✕ 关闭</button>
-        </div>
-      </div>
-      <pre id="_log-body" style="flex:1;overflow-y:auto;background:var(--bg-card);padding:12px;border-radius:6px;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-all;margin:0"></pre>
-    </div>`;
-  document.body.appendChild(mask);
+  const S = window.S || {};
+  const settingsView = document.getElementById('settings-view');
+  const logsView = document.getElementById('logs-view');
+  const dateSel = logsView.querySelector('#_log-date');
+  const body = logsView.querySelector('#_log-body');
 
-  const pre = mask.querySelector('#_log-body');
-  // 标红 ERROR/WARN，普通行正常色
-  // 会话分隔线（app 启动时间）
-  const sessionTs = new Date().toLocaleString('zh-CN');
-  const header = `${'─'.repeat(20)} 本次会话 ${sessionTs} ${'─'.repeat(20)}`;
-  const fullText = header + '\n' + logs;
-  pre.innerHTML = fullText.split('\n').map(line => {
-    if (line.startsWith('─'))              return `<span style="color:var(--text-dim)">${escapeHtml(line)}</span>`;
-    if (/\[ERROR\]/.test(line))            return `<span style="color:var(--danger)">${escapeHtml(line)}</span>`;
-    if (/\[WARN\]/.test(line))             return `<span style="color:var(--warning)">${escapeHtml(line)}</span>`;
-    if (/\[DL\]/.test(line))               return `<span style="color:#88c8ff">${escapeHtml(line)}</span>`;
-    return escapeHtml(line);
-  }).join('\n');
-  pre.scrollTop = pre.scrollHeight;
+  // 切换到日志视图：壳（modal-mask + modal.wide）不动，只换内部内容 → 无重放动画、尺寸一致
+  let dates = await window.api.listLogDates().catch(() => []);
+  if (!Array.isArray(dates)) dates = [];
+  dateSel.innerHTML = dates.length
+    ? dates.map(d => `<option value="${d}">${d}</option>`).join('')
+    : `<option value="">${S.logsNoDate || '（无日志）'}</option>`;
+  settingsView.classList.add('hidden');
+  logsView.classList.remove('hidden');
 
-  mask.querySelector('#_log-close').onclick = () => mask.remove();
-  mask.querySelector('#_log-copy').onclick = async (e) => {
-    await navigator.clipboard.writeText(logs);
-    const btn = e.target;
-    const orig = btn.textContent;
-    btn.textContent = '✓ 已复制';
-    btn.style.color = 'var(--success)';
-    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 2000);
+  function closePanel() {
+    logsView.classList.add('hidden');
+    settingsView.classList.remove('hidden');   // 变回设置视图（同一个壳，无闪烁）
+  }
+
+  // 把整份日志切成「块」：每个块 = 一条带时间戳的记录（含其后所有无时间戳的续行）。
+  // 会话分隔线（====）自成一块，作为不可勾选的分隔标题。
+  function parseBlocks(text) {
+    const lines = text.split('\n');
+    const blocks = [];
+    let cur = null;
+    const tsRe = /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/;   // 时间戳开头 = 新记录
+    for (const line of lines) {
+      if (line.startsWith('====')) {
+        if (cur) { blocks.push(cur); cur = null; }
+        if (line.trim()) blocks.push({ sep: true, text: line });
+        continue;
+      }
+      if (tsRe.test(line)) {
+        if (cur) blocks.push(cur);
+        cur = { sep: false, text: line };
+      } else if (cur) {
+        cur.text += '\n' + line;          // 续行并入当前块
+      } else if (line.trim()) {
+        cur = { sep: false, text: line };  // 无时间戳的孤立行也成块
+      }
+    }
+    if (cur) blocks.push(cur);
+    return blocks;
+  }
+  function blockLevel(t) {
+    if (/\[error\]/i.test(t) || /❌/.test(t)) return 'error';
+    if (/\[warn\]/i.test(t))  return 'warn';
+    if (/\[dl\]/i.test(t))    return 'dl';
+    return 'info';
+  }
+  const LV_COLOR = { error: 'var(--danger)', warn: 'var(--warning)', dl: '#88c8ff', info: '' };
+
+  let blocks = [];
+  async function render() {
+    const d = dateSel.value;
+    const rawText = d ? await window.api.readLog(d).catch(() => '') : '';
+    blocks = parseBlocks(rawText).reverse();   // 最新在最上
+    if (!blocks.length) { body.innerHTML = `<div style="color:var(--text-dim);padding:8px">${S.logsEmpty || '（暂无日志）'}</div>`; return; }
+    body.innerHTML = blocks.map((b, i) => {
+      if (b.sep) {
+        return `<div style="color:var(--accent,#ff5a36);font-weight:600;margin:10px 0 4px;font-size:11px">${escapeHtml(b.text)}</div>`;
+      }
+      const color = LV_COLOR[blockLevel(b.text)] || '';
+      return `<label class="_log-block" style="display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border:1px solid var(--border,#333);border-radius:6px;margin-bottom:6px;cursor:pointer;background:var(--bg-card)">
+        <input type="checkbox" class="_log-pick" data-i="${i}" style="margin-top:2px;flex:none">
+        <span style="flex:1;white-space:pre-wrap;word-break:break-all;${color ? 'color:' + color : ''}">${escapeHtml(b.text)}</span>
+      </label>`;
+    }).join('');
+    body.scrollTop = 0;
+  }
+
+  function checkedText() {
+    return [...body.querySelectorAll('._log-pick:checked')]
+      .map(cb => blocks[+cb.dataset.i].text)
+      .join('\n\n');   // 块之间空行分隔，单块内部保持完整不拆分
+  }
+
+  await render();
+  // 用 onclick 赋值（幂等），多次打开日志视图不会叠加监听
+  dateSel.onchange = render;
+  logsView.querySelector('#_log-close').onclick = () => closePanel();
+  logsView.querySelector('#_log-folder').onclick = () => window.api.openLogFolder();
+  logsView.querySelector('#_log-selall').onclick = () => {
+    const boxes = [...body.querySelectorAll('._log-pick')];
+    const allOn = boxes.length && boxes.every(b => b.checked);
+    boxes.forEach(b => b.checked = !allOn);
   };
-  mask.addEventListener('click', e => { if (e.target === mask) mask.remove(); });
+  logsView.querySelector('#_log-copy').onclick = async (e) => {
+    let txt = checkedText();
+    if (!txt) txt = blocks.filter(b => !b.sep).map(b => b.text).join('\n\n');  // 没勾选就复制全部
+    await navigator.clipboard.writeText(txt);
+    const btn = e.currentTarget, orig = btn.innerHTML;
+    btn.innerHTML = '✓ ' + (S.copied || '已复制');
+    btn.style.color = 'var(--success)';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
+  };
+  logsView.querySelector('#_log-clear').onclick = async () => {
+    const d = dateSel.value;
+    if (!d) return;
+    if (!confirm((S.logsClearConfirm || '确定清空该日志？') + ` (${d})`)) return;
+    await window.api.clearLog(d);
+    let nd = await window.api.listLogDates().catch(() => []);
+    dateSel.innerHTML = (nd && nd.length)
+      ? nd.map(x => `<option value="${x}">${x}</option>`).join('')
+      : `<option value="">${S.logsNoDate || '（无日志）'}</option>`;
+    await render();
+  };
 }
 
 function hexToHsl(hex) {
